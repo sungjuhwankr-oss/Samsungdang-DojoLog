@@ -4,14 +4,14 @@ import "./extra.css";
 import "./add-panel.css";
 
 export const metadata: Metadata = {
-  title: "삼성당 수업관리",
-  description: "아이키도 삼성당 수업구성·수업일지·커리큘럼 관리",
+  title: "삼성당 DojoLog — 지도자",
+  description: "Samsungdang DojoLog — 교안 작성·수업일지 기록·분석",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "삼성당 수업관리", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "삼성당 DojoLog — 지도자", statusBarStyle: "black-translucent" },
   icons: {
-    icon: "/app-icon.svg",
-    shortcut: "/app-icon.svg",
-    apple: "/app-icon.svg",
+    icon: "/app-icon.png",
+    shortcut: "/app-icon.png",
+    apple: "/app-icon.png",
   },
 };
 

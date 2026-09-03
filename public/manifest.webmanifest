@@ -1,1 +1,1 @@
-{"name":"삼성당 수업관리","short_name":"삼성당 수업","description":"아이키도 삼성당 수업구성·수업일지·커리큘럼 관리","start_url":"/","display":"standalone","background_color":"#f3f6f4","theme_color":"#175c45","icons":[{"src":"/app-icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}
+{"name":"삼성당 DojoLog — 지도자","short_name":"DojoLog 지도자","description":"Samsungdang DojoLog — 교안 작성·수업일지 기록·분석","start_url":"/","display":"standalone","background_color":"#f3f6f4","theme_color":"#175c45","icons":[{"src":"/app-icon.png","sizes":"1024x1024","type":"image/png","purpose":"any maskable"}]}
