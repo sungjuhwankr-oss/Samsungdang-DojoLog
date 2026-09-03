@@ -35,17 +35,14 @@ async function readCssTree(directory) {
   return contents.join("\n");
 }
 
-test("emits the catalog's animation and scrolling utilities", async () => {
+test("emits the DojoLog touch and category navigation styles", async () => {
   const css = await readCssTree(path.join(root, "dist"));
 
-  assert.match(css, /--tw-enter-opacity/);
   assert.match(css, /scrollbar-width:\s*thin/);
-  assert.match(css, /scrollbar-width:\s*none/);
-  assert.match(css, /scrollbar-gutter:\s*stable/);
-  assert.match(css, /scroll-fade-reveal-b/);
-  assert.match(css, /mask-image:/);
-  assert.match(css, /tw-shimmer/);
-  assert.match(css, /prefers-reduced-motion:\s*reduce/);
+  assert.match(css, /touch-action:\s*none/);
+  assert.match(css, /scroll-margin-top:\s*86px/);
+  assert.match(css, /\.category-jumps/);
+  assert.match(css, /\.session-order-row/);
 });
 
 test("forwards progress semantics to the primitive", async () => {

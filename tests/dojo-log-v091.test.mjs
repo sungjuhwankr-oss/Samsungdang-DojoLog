@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
@@ -50,18 +49,20 @@ test("uses one shared, state-preserving video action and prefers omote", () => {
   assert.match(page, /영상 없음/);
 });
 
-test("stores session-only completion explicitly without affecting kata recency", () => {
+test("stores session-only completion explicitly and uses session-ordered detailed recency", () => {
   assert.match(page, /type RecordType="detailed"\|"sessionOnly"/);
-  assert.match(page, /l\.recordType\?\?"detailed"/);
-  assert.match(page, /l\.recordType!=="sessionOnly"&&l\.katas\.length>0\)\.slice\(0,10\)/);
+  assert.match(page, /\(log\.recordType\?\?"detailed"\)==="detailed"/);
+  assert.match(page, /sort\(\(a,b\)=>\(b\.session\?\?0\)-\(a\.session\?\?0\)\)\.slice\(0,10\)/);
   assert.match(page, /save\("완료","sessionOnly"\)/);
   assert.match(page, /수업 내용 미기록/);
   assert.match(page, /수업 내용이 기록되지 않아 카타 분석에서 제외됩니다/);
   assert.match(page, /recordType==="detailed"&&!plan\.length/);
 });
 
-test("keeps kata data unchanged and only reduces the hero prompt by about one pixel", () => {
-  assert.equal(createHash("sha256").update(data).digest("hex"), "5402f9bf441c2626a4e8b24356d26a61ef183d684427d04de85c8fe4c70376fb");
+test("adds the requested first-grade cross throws and keeps the compact hero prompt", () => {
+  for (const name of ["한손양손잡기 십자던지기", "뒤양손잡기 십자던지기", "뒤양어깨잡기 십자던지기"]) {
+    assert.match(data, new RegExp(`1:\\{[^\\n]+${name}`));
+  }
   assert.match(css, /\.hero-panel h2\s*\{[^}]*font-size:\s*1\.29rem;[^}]*max-width:\s*320px;?/);
   assert.match(css, /\.page-title h2\s*\{[^}]*font-size:\s*1\.7rem;?/);
 });
@@ -74,14 +75,17 @@ test("anchors delete confirmation to the selected trash button", () => {
   assert.doesNotMatch(page, /className="delete-confirm"/);
 });
 
-test("regenerates alternatives without changing the established score formula", () => {
-  assert.match(page, /score:30\+\(k\.exam\?20:0\)\+\(k\.grade===highest\?16:0\)\+\(k\.form!=="입기"\?14:0\)-recent\.filter\(n=>n===k\.name\)\.length\*18\+\(k\.links\.length\?2:0\)/);
+test("regenerates balanced alternatives without changing the established score formula", () => {
+  assert.match(page, /score:30\+\(k\.exam\?20:0\)\+\(k\.grade===highest\?16:0\)\+\(k\.form!=="입기"\?14:0\)-recentNames\.filter\(n=>n===k\.name\)\.length\*18\+\(k\.links\.length\?2:0\)/);
   assert.match(page, /scored\.filter\(x=>!avoidNames\.has\(x\.k\.name\)\)/);
   assert.match(page, /scored\.filter\(x=>avoidNames\.has\(x\.k\.name\)\)/);
   assert.match(page, /suggestionHistory\.flat\(\)/);
   assert.match(page, /slice\(-6\)/);
   assert.match(page, /현재 수정한 구성안을 새로 만들까요\?/);
   assert.match(page, /className="regenerate-button"[^>]*><RefreshCw\/>다시 구성/);
+  assert.match(page, /const half=Math\.floor\(count\/2\)/);
+  assert.match(page, /recentKatas\.filter\(isPin\)\.length/);
+  assert.match(page, /pinTarget=half,otherTarget=half/);
 });
 
 test("exports the complete state through a save picker with explicit feedback", () => {
@@ -94,4 +98,37 @@ test("exports the complete state through a save picker with explicit feedback", 
   assert.match(page, /JSON 파일을 내보냈습니다/);
   assert.match(page, /JSON 파일을 저장하지 못했습니다/);
   assert.doesNotMatch(page, /URL\.createObjectURL/);
+  assert.match(page, /JSON 전체 복사/);
+  assert.match(page, /JSON 백업 데이터를 복사했습니다/);
+  assert.match(page, /파일 저장이 취소되었거나 이 WebView에서는 지원되지 않습니다/);
+});
+
+test("repairs and manually reorders actual-session numbers without changing the storage key", () => {
+  assert.match(page, /KEY="samsungdang-dojolog-instructor-v1"/);
+  assert.match(page, /function reconcileSessions/);
+  assert.match(page, /sessions=new Map\(completed\.map\(\(\{log\},index\)=>\[log\.id,1011\+index\]\)\)/);
+  assert.match(page, /return reconcileSessions\(normalized\)/);
+  assert.match(page, /reconcileSessions\(logs\.filter\(l=>l\.id!==id\)\)/);
+  assert.match(page, /회차 순서 편집/);
+  assert.match(page, /setLastSession\(1010\+sessionOrder\.length\)/);
+});
+
+test("uses shared categories and excludes the fixed corner throw only from recommendation", () => {
+  const expected = ["십자던지기", "허리던지기", "합기떨어뜨리기"];
+  for (let index = 1; index < expected.length; index += 1) {
+    assert.ok(page.indexOf(`"${expected[index - 1]}"`) < page.indexOf(`"${expected[index]}"`));
+  }
+  assert.match(page, /k\.name==="엇서한손잡기 구석던지기"\)return"호흡던지기"/);
+  assert.match(page, /RECOMMENDATION_KATAS=PICKER_KATAS\.filter\(k=>k\.name!=="엇서한손잡기 구석던지기"\)/);
+  assert.match(page, /className="category-jumps"/);
+  assert.match(page, /className="curriculum-section"/);
+});
+
+test("provides pointer-based drag handles while preserving arrow controls", () => {
+  assert.match(page, /onPointerDown=\{onDragStart\}/);
+  assert.match(page, /data-kata-index=\{index\}/);
+  assert.match(page, /setPlanDirty\(true\)/);
+  assert.match(page, /aria-label="위로"/);
+  assert.match(page, /aria-label="아래로"/);
+  assert.match(page, /data-session-order-index=\{index\}/);
 });
