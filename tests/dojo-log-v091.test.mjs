@@ -7,6 +7,7 @@ const recommendation = await readFile(new URL("../app/recommendation.ts", import
 const videoLinks = await readFile(new URL("../app/video-links.ts", import.meta.url), "utf8");
 const version = await readFile(new URL("../app/version.ts", import.meta.url), "utf8");
 const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+const extraCss = await readFile(new URL("../app/extra.css", import.meta.url), "utf8");
 const data = await readFile(new URL("../app/data.ts", import.meta.url), "utf8");
 const layout = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
 const manifest = JSON.parse(await readFile(new URL("../public/manifest.webmanifest", import.meta.url), "utf8"));
@@ -138,7 +139,7 @@ test("provides pointer-based drag handles while preserving arrow controls", () =
   assert.match(page, /data-session-order-index=\{index\}/);
 });
 
-test("provides grade modes and the v0.9.6 help and change history", () => {
+test("provides grade modes and the v0.9.7 help and change history", () => {
   assert.match(page, /useState<GradeMode>\("balanced"\)/);
   assert.match(page, /최고 급수 기준/);
   assert.match(page, /선택 급수 균형/);
@@ -150,9 +151,47 @@ test("provides grade modes and the v0.9.6 help and change history", () => {
   for (const step of ["날짜 선택","참가 급수 선택","급수 반영 방식 선택","카타 수 선택","자동 구성","필요하면 구성 수정","수업 후 기록"]) assert.match(page,new RegExp(step));
   assert.match(page, /전체 구성안 다시 만들기/);
   assert.doesNotMatch(page, /전체 안 바꾸기/);
-  assert.match(version, /APP_VERSION = "0\.9\.6"/);
+  assert.match(version, /APP_VERSION = "0\.9\.7"/);
   assert.match(version, /APP_CHANNEL = "beta"/);
   assert.ok((page.match(/APP_VERSION_LABEL/g) ?? []).length >= 3);
-  for (const release of ["v0.9.0","v0.9.1","v0.9.2","v0.9.3","v0.9.4","v0.9.5","v0.9.6"]) assert.match(page,new RegExp(release.replaceAll(".","\\.")));
+  for (const release of ["v0.9.0","v0.9.1","v0.9.2","v0.9.3","v0.9.4","v0.9.5","v0.9.6","v0.9.7"]) assert.match(page,new RegExp(release.replaceAll(".","\\.")));
   assert.doesNotMatch(page, /JSON 백업 파일 저장 완성/);
+});
+
+test("provides an anchored help table of contents and contextual return button", () => {
+  const ids = ["help-background","help-quick-start","help-grade-selection","help-grade-mode","help-review-preview","help-recommendation","help-balance","help-technique-flow","help-representative-kata","help-editing","help-log","help-reference","help-backup","help-changelog"];
+  assert.equal(new Set(ids).size, 14);
+  for (const id of ids) {
+    assert.match(page, new RegExp(`id:\"${id}\"`));
+    assert.match(page, new RegExp(`id=\"${id}\"`));
+  }
+  assert.match(page, /id="help-toc"/);
+  assert.match(page, /new IntersectionObserver/);
+  assert.match(page, /scrollIntoView\(\{behavior:"smooth",block:"start"\}\)/);
+  assert.match(page, /className="help-toc-fab"/);
+  assert.match(page, /목차 ↑/);
+  assert.match(extraCss, /scroll-margin-top:\s*86px/);
+  assert.match(extraCss, /bottom:\s*calc\(84px \+ env\(safe-area-inset-bottom\)\)/);
+});
+
+test("uses balanced-first semantic radios without changing the grade mode contract", () => {
+  assert.match(page, /\[\['balanced','선택 급수 균형'\],\['highest','최고 급수 기준'\]\]/);
+  assert.equal((page.match(/type="radio"/g) ?? []).length, 1);
+  assert.match(page, /name="grade-mode"/);
+  assert.match(page, /checked=\{value===mode\}/);
+  assert.match(page, /htmlFor=\{`grade-mode-\$\{mode\}`\}/);
+  assert.match(page, /className="help-radio-example"/);
+  assert.match(page, /◉<\/i>선택 급수 균형/);
+  assert.match(extraCss, /\.grade-mode label\.active/);
+  assert.doesNotMatch(extraCss, /\.grade-mode button/);
+});
+
+test("removes journal video counts while preserving kata link data consumers", () => {
+  const journal = page.slice(page.indexOf('{tab==="logs"'), page.indexOf('{tab==="hombu"'));
+  assert.ok(journal.length > 0);
+  assert.doesNotMatch(journal, /k\.links\.length/);
+  assert.doesNotMatch(journal, /영상 \{k\.links\.length\}/);
+  assert.match(page, /function VideoButtons/);
+  assert.match(page, /bandText\(log\.date,log\.session,log\.katas\)/);
+  assert.match(page, /JSON\.stringify\(\{logs,lastSession\},null,2\)/);
 });

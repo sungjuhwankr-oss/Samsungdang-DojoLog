@@ -263,8 +263,19 @@
   gap: 18px;
 }
 .grade-mode-field {
+  min-width: 0;
+  margin: 0;
+  padding-right: 0;
+  padding-bottom: 0;
+  padding-left: 0;
   padding-top: 15px;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
   border-top: 1px solid var(--line);
+}
+.grade-mode-field .field-label {
+  padding: 0;
 }
 .grade-mode {
   display: grid;
@@ -274,19 +285,36 @@
   border-radius: 13px;
   background: #edf2ef;
 }
-.grade-mode button {
-  border: 0;
+.grade-mode label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid transparent;
   border-radius: 10px;
   padding: 10px 8px;
   background: transparent;
   color: #66736d;
   font-size: 0.78rem;
   font-weight: 800;
+  cursor: pointer;
 }
-.grade-mode button.active {
+.grade-mode label.active {
+  border-color: #cbded4;
   background: #fff;
   color: var(--green);
   box-shadow: 0 2px 8px rgba(35, 65, 50, 0.1);
+}
+.grade-mode input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--green);
+}
+.grade-mode label span {
+  white-space: nowrap;
 }
 .grade-mode-field > small {
   display: block;
@@ -299,6 +327,68 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  scroll-margin-top: 86px;
+}
+.help-toc {
+  scroll-margin-top: 86px;
+}
+.help-toc h3 {
+  margin: 0 0 12px;
+  color: var(--green);
+  font-size: 1rem;
+}
+.help-toc nav {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+}
+.help-toc nav button {
+  display: flex;
+  min-width: 0;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-bottom: 1px solid #e3e9e6;
+  padding: 8px 4px;
+  background: transparent;
+  color: #40564c;
+  text-align: left;
+  font-size: 0.8rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+.help-toc nav button span {
+  display: grid;
+  flex: 0 0 auto;
+  width: 23px;
+  height: 23px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--green2);
+  color: var(--green);
+  font-size: 0.69rem;
+  font-weight: 900;
+}
+.help-toc nav button:focus-visible {
+  border-radius: 6px;
+  outline: 2px solid #74a18c;
+  outline-offset: 2px;
+}
+.help-toc-fab {
+  position: fixed;
+  right: max(16px, calc((100vw - 760px) / 2 + 16px));
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  z-index: 29;
+  border: 1px solid #a7c1b5;
+  border-radius: 999px;
+  padding: 9px 12px;
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--green);
+  font-size: 0.76rem;
+  font-weight: 850;
+  box-shadow: 0 5px 18px rgba(20, 45, 34, 0.15);
+  backdrop-filter: blur(10px);
 }
 .help-screen .guide h3,
 .help-screen .guide p,
@@ -316,6 +406,41 @@
   color: #4e5c55;
   font-size: 0.86rem;
   line-height: 1.65;
+}
+.development-background h4 {
+  margin: 0;
+  color: #344b40;
+  font-size: 0.92rem;
+}
+.help-radio-example {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px 18px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 11px;
+  background: #f3f6f4;
+  color: #69746f;
+}
+.help-radio-example span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+.help-radio-example i {
+  color: #87918c;
+  font-style: normal;
+}
+.help-radio-example span.active,
+.help-radio-example span.active i {
+  color: var(--green);
+}
+.help-radio-example small {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 650;
 }
 .quick-flow {
   width: min(100%, 360px);
@@ -436,8 +561,23 @@
 }
 
 @media (max-width: 380px) {
-  .grade-mode button {
+  .grade-mode label {
+    gap: 5px;
+    padding-inline: 5px;
     font-size: 0.72rem;
+  }
+  .grade-mode input {
+    width: 14px;
+    height: 14px;
+  }
+  .help-toc nav {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 700px) {
+  .help-toc-fab {
+    bottom: 100px;
   }
 }
 
