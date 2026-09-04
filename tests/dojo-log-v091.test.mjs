@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+const recommendation = await readFile(new URL("../app/recommendation.ts", import.meta.url), "utf8");
 const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
 const data = await readFile(new URL("../app/data.ts", import.meta.url), "utf8");
 const layout = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
@@ -37,7 +38,7 @@ test("preserves custom kata in the edit select", () => {
 test("uses one shared, state-preserving video action and prefers omote", () => {
   const expected = ["1교","2교","3교","4교","5교","입신던지기","사방던지기","손목뒤집기","천지던지기","회전던지기","호흡던지기","입기 호흡법","십자던지기"];
   for (let index = 1; index < expected.length; index += 1) {
-    assert.ok(page.indexOf(`"${expected[index - 1]}"`) < page.indexOf(`"${expected[index]}"`));
+    assert.ok(recommendation.indexOf(`"${expected[index - 1]}"`) < recommendation.indexOf(`"${expected[index]}"`));
   }
   assert.match(page, /find\(link=>link\.label==="오모테"\)\?\.url\?\?valid\[0\]\?\.url/);
   assert.match(page, /function openVideo\(url:string\)/);
@@ -51,8 +52,8 @@ test("uses one shared, state-preserving video action and prefers omote", () => {
 
 test("stores session-only completion explicitly and uses session-ordered detailed recency", () => {
   assert.match(page, /type RecordType="detailed"\|"sessionOnly"/);
-  assert.match(page, /\(log\.recordType\?\?"detailed"\)==="detailed"/);
-  assert.match(page, /sort\(\(a,b\)=>\(b\.session\?\?0\)-\(a\.session\?\?0\)\)\.slice\(0,10\)/);
+  assert.match(recommendation, /\(log\.recordType\?\?"detailed"\)==="detailed"/);
+  assert.match(recommendation, /sort\(\(a,b\)=>\(b\.session\?\?0\)-\(a\.session\?\?0\)\)\.slice\(0,10\)/);
   assert.match(page, /save\("완료","sessionOnly"\)/);
   assert.match(page, /수업 내용 미기록/);
   assert.match(page, /수업 내용이 기록되지 않아 카타 분석에서 제외됩니다/);
@@ -76,16 +77,16 @@ test("anchors delete confirmation to the selected trash button", () => {
 });
 
 test("regenerates balanced alternatives without changing the established score formula", () => {
-  assert.match(page, /score:30\+\(k\.exam\?20:0\)\+\(k\.grade===highest\?16:0\)\+\(k\.form!=="입기"\?14:0\)-recentNames\.filter\(n=>n===k\.name\)\.length\*18\+\(k\.links\.length\?2:0\)/);
-  assert.match(page, /scored\.filter\(x=>!avoidNames\.has\(x\.k\.name\)\)/);
-  assert.match(page, /scored\.filter\(x=>avoidNames\.has\(x\.k\.name\)\)/);
+  assert.match(recommendation, /base:30\+\(k\.exam\?20:0\)\+\(k\.grade===highest\?16:0\)\+\(k\.form!=="입기"\?14:0\)-recentNames\.filter\(name=>name===k\.name\)\.length\*18\+\(k\.links\.length\?2:0\)/);
+  assert.match(recommendation, /candidates\.filter\(x=>!avoidNames\.has\(x\.k\.name\)\)/);
+  assert.match(recommendation, /candidates\.filter\(x=>avoidNames\.has\(x\.k\.name\)\)/);
   assert.match(page, /suggestionHistory\.flat\(\)/);
   assert.match(page, /slice\(-6\)/);
   assert.match(page, /현재 수정한 구성안을 새로 만들까요\?/);
   assert.match(page, /className="regenerate-button"[^>]*><RefreshCw\/>다시 구성/);
-  assert.match(page, /const half=Math\.floor\(count\/2\)/);
-  assert.match(page, /recentKatas\.filter\(isPin\)\.length/);
-  assert.match(page, /pinTarget=half,otherTarget=half/);
+  assert.match(recommendation, /const half=Math\.floor\(count\/2\)/);
+  assert.match(recommendation, /recentKatas\.filter\(isPin\)\.length/);
+  assert.match(recommendation, /pinTarget=half,otherTarget=half/);
 });
 
 test("exports the complete state through a save picker with explicit feedback", () => {
@@ -116,10 +117,10 @@ test("repairs and manually reorders actual-session numbers without changing the 
 test("uses shared categories and excludes the fixed corner throw only from recommendation", () => {
   const expected = ["십자던지기", "허리던지기", "합기떨어뜨리기"];
   for (let index = 1; index < expected.length; index += 1) {
-    assert.ok(page.indexOf(`"${expected[index - 1]}"`) < page.indexOf(`"${expected[index]}"`));
+    assert.ok(recommendation.indexOf(`"${expected[index - 1]}"`) < recommendation.indexOf(`"${expected[index]}"`));
   }
-  assert.match(page, /k\.name==="엇서한손잡기 구석던지기"\)return"호흡던지기"/);
-  assert.match(page, /RECOMMENDATION_KATAS=PICKER_KATAS\.filter\(k=>k\.name!=="엇서한손잡기 구석던지기"\)/);
+  assert.match(recommendation, /k\.name==="엇서한손잡기 구석던지기"\)return"호흡던지기"/);
+  assert.match(recommendation, /k\.name!=="엇서한손잡기 구석던지기"/);
   assert.match(page, /className="category-jumps"/);
   assert.match(page, /className="curriculum-section"/);
 });
@@ -131,4 +132,16 @@ test("provides pointer-based drag handles while preserving arrow controls", () =
   assert.match(page, /aria-label="위로"/);
   assert.match(page, /aria-label="아래로"/);
   assert.match(page, /data-session-order-index=\{index\}/);
+});
+
+test("provides v0.9.5 grade modes and the current help and change history", () => {
+  assert.match(page, /useState<GradeMode>\("balanced"\)/);
+  assert.match(page, /최고 급수 기준/);
+  assert.match(page, /선택 급수 균형/);
+  assert.match(page, /참가 급수별 복습·예습 범위 반영/);
+  assert.match(page, /기술 연계와 수업 순서/);
+  assert.match(page, /대표 카타 목록 보기/);
+  assert.match(page, /v0\.9\.5 beta/);
+  for (const version of ["v0.9.0","v0.9.1","v0.9.2","v0.9.3","v0.9.4","v0.9.5"]) assert.match(page,new RegExp(version.replaceAll(".","\\.")));
+  assert.doesNotMatch(page, /JSON 백업 파일 저장 완성/);
 });
