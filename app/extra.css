@@ -317,18 +317,44 @@
   font-size: 0.86rem;
   line-height: 1.65;
 }
-.quick-steps {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
-  padding: 0;
-  list-style-position: inside;
+.quick-flow {
+  width: min(100%, 360px);
+  margin: 1px auto 0;
+  padding: 2px 8px;
 }
-.quick-steps li {
-  padding: 9px 10px;
-  border-radius: 10px;
-  background: #f1f5f3;
-  font-weight: 700;
+.quick-flow-item {
+  display: flex;
+  flex-direction: column;
+}
+.quick-step {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 2px 0;
+}
+.quick-step > span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--green2);
+  color: var(--green);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+.quick-step > strong {
+  color: #3f5048;
+  font-size: 0.88rem;
+}
+.quick-connector {
+  width: 28px;
+  height: 18px;
+  color: #8aa99a;
+  font-size: 0.86rem;
+  line-height: 18px;
+  text-align: center;
 }
 .help-table-wrap {
   max-width: 100%;
@@ -413,9 +439,29 @@
   .grade-mode button {
     font-size: 0.72rem;
   }
-  .quick-steps {
-    grid-template-columns: 1fr;
-  }
+}
+
+.brand .app-version {
+  display: block;
+  margin-top: 3px;
+  color: #8a948f;
+  font-size: 0.62rem;
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+.video-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+.video-actions .video-link {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-size: 0.69rem;
 }
 
 .delete-anchor {
