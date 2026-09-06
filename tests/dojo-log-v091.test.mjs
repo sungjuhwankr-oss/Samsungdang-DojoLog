@@ -82,7 +82,7 @@ test("anchors delete confirmation to the selected trash button", () => {
 });
 
 test("regenerates balanced alternatives without changing the established score formula", () => {
-  assert.match(recommendation, /base:30\+\(k\.exam\?20:0\)\+\(k\.grade===highest\?16:0\)\+\(k\.form!=="입기"\?14:0\)-recentNames\.filter\(name=>name===k\.name\)\.length\*18\+\(k\.links\.length\?2:0\)/);
+  assert.match(recommendation, /base:30\+\(k\.exam\?20:0\)\+\(k\.grade===focusGrade\?16:0\)\+\(k\.form!=="입기"\?14:0\)-recentNames\.filter\(name=>name===k\.name\)\.length\*18\+\(k\.links\.length\?2:0\)/);
   assert.match(recommendation, /candidates\.filter\(x=>!avoidNames\.has\(x\.k\.name\)\)/);
   assert.match(recommendation, /candidates\.filter\(x=>avoidNames\.has\(x\.k\.name\)\)/);
   assert.match(page, /suggestionHistory\.flat\(\)/);
@@ -139,7 +139,7 @@ test("provides pointer-based drag handles while preserving arrow controls", () =
   assert.match(page, /data-session-order-index=\{index\}/);
 });
 
-test("provides grade modes and the v0.9.7 help and change history", () => {
+test("provides grade modes and the v0.9.8 help and change history", () => {
   assert.match(page, /useState<GradeMode>\("balanced"\)/);
   assert.match(page, /최고 급수 기준/);
   assert.match(page, /선택 급수 균형/);
@@ -151,10 +151,10 @@ test("provides grade modes and the v0.9.7 help and change history", () => {
   for (const step of ["날짜 선택","참가 급수 선택","급수 반영 방식 선택","카타 수 선택","자동 구성","필요하면 구성 수정","수업 후 기록"]) assert.match(page,new RegExp(step));
   assert.match(page, /전체 구성안 다시 만들기/);
   assert.doesNotMatch(page, /전체 안 바꾸기/);
-  assert.match(version, /APP_VERSION = "0\.9\.7"/);
+  assert.match(version, /APP_VERSION = "0\.9\.8"/);
   assert.match(version, /APP_CHANNEL = "beta"/);
   assert.ok((page.match(/APP_VERSION_LABEL/g) ?? []).length >= 3);
-  for (const release of ["v0.9.0","v0.9.1","v0.9.2","v0.9.3","v0.9.4","v0.9.5","v0.9.6","v0.9.7"]) assert.match(page,new RegExp(release.replaceAll(".","\\.")));
+  for (const release of ["v0.9.0","v0.9.1","v0.9.2","v0.9.3","v0.9.4","v0.9.5","v0.9.6","v0.9.7","v0.9.8"]) assert.match(page,new RegExp(release.replaceAll(".","\\.")));
   assert.doesNotMatch(page, /JSON 백업 파일 저장 완성/);
 });
 
@@ -194,4 +194,22 @@ test("removes journal video counts while preserving kata link data consumers", (
   assert.match(page, /function VideoButtons/);
   assert.match(page, /bandText\(log\.date,log\.session,log\.katas\)/);
   assert.match(page, /JSON\.stringify\(\{logs,lastSession\},null,2\)/);
+});
+
+test("adds backward-compatible ungraded participants without changing exam targets", () => {
+  assert.match(data, /export type Grade = NumericGrade \| "ungraded"/);
+  assert.match(data, /PARTICIPANT_GRADES:Grade\[\]=\["ungraded",\.\.\.GRADES\]/);
+  assert.match(data, /grade==="ungraded"\?"무급"/);
+  assert.doesNotMatch(data, /(?:Grade|grade)[^\n]*=\s*0/);
+  assert.match(page, /PARTICIPANT_GRADES\.map/);
+  assert.match(page, /formatGrade\(g\)/);
+  assert.match(recommendation, /participant==="ungraded"/);
+  assert.match(recommendation, /kataGrade===9\?"initial":null/);
+  assert.match(recommendation, /highestNumericGrade\(grades\)/);
+  assert.match(page, /선택한 급으로 승급할 때 새로 평가하는 항목입니다/);
+  assert.doesNotMatch(page, /선택한 급에서 새로 평가하는 항목입니다/);
+  assert.match(page, /9급 심사요항을 최초 학습 범위로 봅니다/);
+  assert.match(page, /무급·7급·5급·2급/);
+  assert.match(page, /useState<NumericGrade>\(7\)/);
+  assert.match(page, /exam-tabs[^\n]+GRADES\.map/);
 });
