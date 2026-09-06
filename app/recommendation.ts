@@ -21,6 +21,15 @@ const UNGRADED_INITIAL_NAMES=new Set(EXAM_GROUPS[9].kata);
 const UNGRADED_PREVIEW_NAMES=new Set(EXAM_GROUPS[8].kata);
 const UNGRADED_BEGINNER_SAFE_SET=new Set<string>(UNGRADED_BEGINNER_SAFE_NAMES);
 
+// Recommendation-only compatibility shim: these two duplicate exam entries were
+// removed from the cumulative exam source, but v0.9.8 numeric/mixed fixtures must
+// retain their established recommendation behavior. Exam data and UI still use 8급.
+const LEGACY_RECOMMENDATION_GRADE:Partial<Record<string,NumericGrade>>={
+ "맞서한손잡기 입신던지기":6,
+ "엇서한손잡기 사방던지기":5
+};
+function recommendationGrade(k:Kata){return LEGACY_RECOMMENDATION_GRADE[k.name]??k.grade}
+
 const DIRECT_RELATIONS=[["1교","입신던지기"],["1교","허리던지기"],["1교","십자던지기"],["2교","사방던지기"],["2교","손목뒤집기"],["2교","내회전던지기"],["2교","외회전던지기"],["3교","허리던지기"]];
 const NEAR_RELATIONS=[["1교","4교"],["1교","5교"],["4교","5교"],["2교","5교"],["3교","4교"],["입신던지기","천지던지기"],["입신던지기","손목뒤집기"],["입신던지기","입기 호흡법"],["사방던지기","손목뒤집기"]];
 
@@ -51,12 +60,16 @@ export function recommend(grades:Grade[],count:number,logs:RecommendationLog[],a
  if(!grades.length)return[];
  const ungradedOnly=isUngradedOnly(grades),highest=highestNumericGrade(grades),focusGrade=highest??9,recentLogs=recentDetailed(logs),recentKatas=recentLogs.flatMap(log=>log.katas),recentNames=recentKatas.map(k=>k.name);
  const selected=[...grades].sort((a,b)=>a==="ungraded"?-1:b==="ungraded"?1:a-b),participantWeight=(grade:Grade)=>selected.length===1?1:mode==="highest"?(grade===highest?2.5:0.65):1;
- const history=new Map(selected.map(grade=>[grade,{review:recentKatas.filter(k=>learningRole(k.grade,grade)==="review").length,preview:recentKatas.filter(k=>learningRole(k.grade,grade)==="preview").length,initial:recentKatas.filter(k=>learningRole(k.grade,grade)==="initial").length}]));
+ const roleFor=(k:Kata,grade:Grade)=>learningRole(ungradedOnly?k.grade:recommendationGrade(k),grade);
+ const history=new Map(selected.map(grade=>[grade,{review:recentKatas.filter(k=>roleFor(k,grade)==="review").length,preview:recentKatas.filter(k=>roleFor(k,grade)==="preview").length,initial:recentKatas.filter(k=>roleFor(k,grade)==="initial").length}]));
  const previewCeiling=highest===undefined?1:highest>1?highest-1:1;
- const candidates=KATAS.filter(k=>(k.area==="일반 체술"||k.area==="호흡력")&&k.name!=="좌기 호흡법"&&k.name!=="엇서한손잡기 구석던지기"&&k.name!=="맞서한손잡기에서 바로 넣는 2교"&&k.hombu&&(ungradedOnly?ungradedLearningStage(k)!==null:(!k.grade||k.grade>=previewCeiling))).map(k=>({
-  k,
-  base:30+(k.exam?20:0)+(k.grade===focusGrade?16:0)+(k.form!=="입기"?14:0)-recentNames.filter(name=>name===k.name).length*18+(k.links.length?2:0)+(ungradedOnly?(ungradedLearningStage(k)==="initial"?24:ungradedLearningStage(k)==="preview"?10:0):0)
- }));
+ const candidates=KATAS.filter(k=>{
+  const grade=ungradedOnly?k.grade:recommendationGrade(k);
+  return(k.area==="일반 체술"||k.area==="호흡력")&&k.name!=="좌기 호흡법"&&k.name!=="엇서한손잡기 구석던지기"&&k.name!=="맞서한손잡기에서 바로 넣는 2교"&&k.hombu&&(ungradedOnly?ungradedLearningStage(k)!==null:(!grade||grade>=previewCeiling));
+ }).map(k=>{
+  const grade=ungradedOnly?k.grade:recommendationGrade(k);
+  return{k,base:30+(k.exam?20:0)+(grade===focusGrade?16:0)+(k.form!=="입기"?14:0)-recentNames.filter(name=>name===k.name).length*18+(k.links.length?2:0)+(ungradedOnly?(ungradedLearningStage(k)==="initial"?24:ungradedLearningStage(k)==="preview"?10:0):0)};
+ });
  const baseSort=(a:{k:Kata;base:number},b:{k:Kata;base:number})=>b.base-a.base||Number(isRepresentative(b.k))-Number(isRepresentative(a.k))||techniqueOrder(a.k)-techniqueOrder(b.k)||a.k.name.localeCompare(b.k.name,"ko");
  candidates.sort(baseSort);
  if(count===1)return candidates.length?[candidates[0].k]:[];
@@ -65,7 +78,7 @@ export function recommend(grades:Grade[],count:number,logs:RecommendationLog[],a
  if(count%2){if(recentPin<recentOther)pinTarget++;else if(recentOther<recentPin)otherTarget++;else{const firstPin=candidates.find(x=>isPin(x.k)),firstOther=candidates.find(x=>!isPin(x.k));if((firstPin?.base??-Infinity)>=(firstOther?.base??-Infinity))pinTarget++;else otherTarget++}}
  const out:Kata[]=[],planCoverage=new Map(selected.map(grade=>[grade,{review:0,preview:0,initial:0}]));
  const diversityLimit=ungradedOnly?3:2,canAdd=(k:Kata)=>out.filter(item=>item.technique===k.technique).length<diversityLimit&&out.filter(item=>item.attack===k.attack).length<diversityLimit;
- const coverageGain=(k:Kata)=>selected.reduce((sum,grade)=>{const role=learningRole(k.grade,grade);if(!role)return sum;const recent=history.get(grade)![role],planned=planCoverage.get(grade)![role],priority=role==="preview"?6:12;return sum+participantWeight(grade)*priority*(1+1/(1+recent))/(1+planned)},0);
+ const coverageGain=(k:Kata)=>selected.reduce((sum,grade)=>{const role=roleFor(k,grade);if(!role)return sum;const recent=history.get(grade)![role],planned=planCoverage.get(grade)![role],priority=role==="preview"?6:12;return sum+participantWeight(grade)*priority*(1+1/(1+recent))/(1+planned)},0);
  const relationGain=(k:Kata)=>out.reduce((sum,item)=>sum+(related(techniqueKey(k),techniqueKey(item),DIRECT_RELATIONS)?2:0)+(related(techniqueKey(k),techniqueKey(item),NEAR_RELATIONS)?1:0),0);
  const choose=(pool:typeof candidates,observeTargets:boolean)=>{
   const valid=pool.filter(x=>!out.some(k=>k.id===x.k.id)&&canAdd(x.k)&&(!observeTargets||(isPin(x.k)?out.filter(isPin).length<pinTarget:out.filter(k=>!isPin(k)).length<otherTarget)));
@@ -73,8 +86,8 @@ export function recommend(grades:Grade[],count:number,logs:RecommendationLog[],a
   return valid[0];
  };
  const preferred=candidates.filter(x=>!avoidNames.has(x.k.name)),avoided=candidates.filter(x=>avoidNames.has(x.k.name));
- for(const pool of [preferred,avoided])while(out.length<count){const next=choose(pool,true);if(!next)break;out.push(next.k);for(const grade of selected){const role=learningRole(next.k.grade,grade);if(role)planCoverage.get(grade)![role]++}}
- for(const pool of [preferred,avoided])while(out.length<count){const next=choose(pool,false);if(!next)break;out.push(next.k);for(const grade of selected){const role=learningRole(next.k.grade,grade);if(role)planCoverage.get(grade)![role]++}}
+ for(const pool of [preferred,avoided])while(out.length<count){const next=choose(pool,true);if(!next)break;out.push(next.k);for(const grade of selected){const role=roleFor(next.k,grade);if(role)planCoverage.get(grade)![role]++}}
+ for(const pool of [preferred,avoided])while(out.length<count){const next=choose(pool,false);if(!next)break;out.push(next.k);for(const grade of selected){const role=roleFor(next.k,grade);if(role)planCoverage.get(grade)![role]++}}
  if(!ungradedOnly&&out.length<count){const directEntry=KATAS.find(k=>k.name==="맞서한손잡기에서 바로 넣는 2교");if(directEntry&&directEntry.hombu&&canAdd(directEntry))out.push(directEntry)}
  const actualPin=out.filter(isPin).length,actualOther=out.length-actualPin;
  return alternateOrder(out.slice(0,count),actualPin,actualOther);

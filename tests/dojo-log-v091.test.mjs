@@ -83,7 +83,10 @@ test("anchors delete confirmation to the selected trash button", () => {
 });
 
 test("regenerates balanced alternatives without changing the established score formula", () => {
-  assert.match(recommendation, /base:30\+\(k\.exam\?20:0\)\+\(k\.grade===focusGrade\?16:0\)\+\(k\.form!=="입기"\?14:0\)-recentNames\.filter\(name=>name===k\.name\)\.length\*18\+\(k\.links\.length\?2:0\)/);
+  assert.match(recommendation, /base:30\+\(k\.exam\?20:0\)\+\(grade===focusGrade\?16:0\)\+\(k\.form!=="입기"\?14:0\)-recentNames\.filter\(name=>name===k\.name\)\.length\*18\+\(k\.links\.length\?2:0\)/);
+  assert.match(recommendation, /Recommendation-only compatibility shim/);
+  assert.match(recommendation, /"맞서한손잡기 입신던지기":6/);
+  assert.match(recommendation, /"엇서한손잡기 사방던지기":5/);
   assert.match(recommendation, /candidates\.filter\(x=>!avoidNames\.has\(x\.k\.name\)\)/);
   assert.match(recommendation, /candidates\.filter\(x=>avoidNames\.has\(x\.k\.name\)\)/);
   assert.match(page, /suggestionHistory\.flat\(\)/);

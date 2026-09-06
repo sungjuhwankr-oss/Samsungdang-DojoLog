@@ -23,3 +23,20 @@ test("numbered generic video pairs survive canonical Kata construction",()=>{
   assert.deepEqual(kata.links.map(link=>link.label),["1","2"]);
  }
 });
+
+test("eighth-grade basics are not duplicated in later cumulative exam tabs",()=>{
+ const cases=[
+  {name:"맞서한손잡기 입신던지기",removedFrom:6},
+  {name:"엇서한손잡기 사방던지기",removedFrom:5}
+ ] as const;
+ for(const {name,removedFrom} of cases){
+  const kata=KATAS.find(item=>item.name===name);
+  assert.ok(kata);
+  assert.equal(kata.grade,8);
+  assert.equal(kata.exam,true);
+  assert.equal(kata.hombu,true);
+  assert.ok(EXAM_GROUPS[8].kata.includes(name));
+  assert.ok(!EXAM_GROUPS[removedFrom].kata.includes(name));
+  assert.ok(kata.links.length>0);
+ }
+});
