@@ -1,8 +1,16 @@
-export type Grade = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+export type NumericGrade = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+export type Grade = NumericGrade | "ungraded";
 export type VideoLink = { label?: string; url: string };
-export type Kata = { id:string; name:string; form:"입기"|"좌기"|"반신반립"; attack:string; technique:string; grade?:Grade; hombu:boolean; exam:boolean; area:"일반 체술"|"호흡력"|"다인 잡기"|"무기 잡기"; links:VideoLink[] };
+export type Kata = { id:string; name:string; form:"입기"|"좌기"|"반신반립"; attack:string; technique:string; grade?:NumericGrade; hombu:boolean; exam:boolean; area:"일반 체술"|"호흡력"|"다인 잡기"|"무기 잡기"; links:VideoLink[] };
 
-export const EXAM_GROUPS: Record<Grade,{sessions:number;focus:string;basics?:string[];kata:string[]}> = {
+export const GRADES:NumericGrade[]=[9,8,7,6,5,4,3,2,1];
+export const PARTICIPANT_GRADES:Grade[]=["ungraded",...GRADES];
+export function formatGrade(grade:Grade){return grade==="ungraded"?"무급":`${grade}급`}
+export function gradeProgressionOrder(grade:Grade){return grade==="ungraded"?0:10-grade}
+export function sortGrades(grades:Grade[]){return [...grades].sort((a,b)=>gradeProgressionOrder(a)-gradeProgressionOrder(b))}
+export function highestNumericGrade(grades:Grade[]):NumericGrade|undefined{return grades.reduce<NumericGrade|undefined>((highest,grade)=>grade==="ungraded"?highest:highest===undefined||grade<highest?grade:highest,undefined)}
+
+export const EXAM_GROUPS: Record<NumericGrade,{sessions:number;focus:string;basics?:string[];kata:string[]}> = {
   9:{sessions:10,focus:"구석던지기·호흡던지기",basics:["후방낙법","측방회전낙법","전방회전낙법","반신(좌·우)","맞서기·엇서기","입신·전환·회전·전회","전환법"],kata:["엇서한손잡기 구석던지기","엇서한손잡기 호흡던지기"]},
   8:{sessions:10,focus:"기초 체술",basics:["무릎걸음","좌기 호흡법"],kata:["맞서한손잡기 입신던지기","맞서한손잡기 손목뒤집기","맞서한손잡기 1교","엇서한손잡기 사방던지기"]},
   7:{sessions:20,focus:"1교",kata:["정면타 1교","어깨잡기 1교","횡면타 1교","뒤양손잡기 1교","좌기 정면타 1교"]},
@@ -125,9 +133,8 @@ const VIDEO_TEXT=`
 const videoMap=new Map<string,VideoLink[]>();
 VIDEO_TEXT.trim().split("\n").forEach(line=>{const p=line.split("|");const name=p[0],label=p.length===3?p[1]:undefined,url=p[p.length-1];videoMap.set(name,[...(videoMap.get(name)??[]),{label,url}])});
 function techniqueOf(name:string){return ["합기떨어뜨리기","외회전던지기","내회전던지기","입신던지기","사방던지기","손목뒤집기","천지던지기","허리던지기","호흡던지기","십자던지기","구석던지기","호흡법","5교","4교","3교","2교","1교"].find(v=>name.includes(v))??"기타"}
-function kataFrom(name:string,grade?:Grade,exam=false,hombu=true):Kata{const form=name.startsWith("좌기 ")?"좌기":name.startsWith("반신반립 ")?"반신반립":"입기";const technique=techniqueOf(name);const clean=name.replace(/^(좌기|반신반립) /,"");const attack=clean.slice(0,Math.max(0,clean.lastIndexOf(` ${technique}`)))||clean;const area=name.startsWith("2인")?"다인 잡기":/^(단도잡기|검잡기|장잡기)/.test(name)?"무기 잡기":technique==="호흡법"?"호흡력":"일반 체술";return{id:name.replace(/\s/g,"-"),name,form,attack,technique,grade,hombu,exam,area,links:videoMap.get(name)??[]}}
+function kataFrom(name:string,grade?:NumericGrade,exam=false,hombu=true):Kata{const form=name.startsWith("좌기 ")?"좌기":name.startsWith("반신반립 ")?"반신반립":"입기";const technique=techniqueOf(name);const clean=name.replace(/^(좌기|반신반립) /,"");const attack=clean.slice(0,Math.max(0,clean.lastIndexOf(` ${technique}`)))||clean;const area=name.startsWith("2인")?"다인 잡기":/^(단도잡기|검잡기|장잡기)/.test(name)?"무기 잡기":technique==="호흡법"?"호흡력":"일반 체술";return{id:name.replace(/\s/g,"-"),name,form,attack,technique,grade,hombu,exam,area,links:videoMap.get(name)??[]}}
 const examNames=new Set(Object.values(EXAM_GROUPS).flatMap(g=>g.kata));
-const examKatas=(Object.entries(EXAM_GROUPS) as [string,(typeof EXAM_GROUPS)[Grade]][]).flatMap(([grade,g])=>g.kata.map(name=>kataFrom(name,Number(grade) as Grade,true,true)));
+const examKatas=(Object.entries(EXAM_GROUPS) as [string,(typeof EXAM_GROUPS)[NumericGrade]][]).flatMap(([grade,g])=>g.kata.map(name=>kataFrom(name,Number(grade) as NumericGrade,true,true)));
 export const KATAS:Kata[]=[...examKatas,...[...videoMap.keys()].filter(name=>!examNames.has(name)).map(name=>kataFrom(name,undefined,false,!/^(2인|단도잡기|검잡기|장잡기|맞서한손잡기에서)/.test(name)))].filter((k,i,a)=>a.findIndex(x=>x.name===k.name)===i);
-export const GRADES:Grade[]=[9,8,7,6,5,4,3,2,1];
 export function bandText(date:string,session:number,katas:Kata[]){const d=new Date(`${date}T00:00:00`);const ds=`${String(d.getFullYear()).slice(2)}. ${d.getMonth()+1}. ${d.getDate()}.`;const entries=katas.map(k=>{if(!k.links.length)return`○ ${k.name}`;if(k.links.length===1&&!k.links[0].label)return`○ ${k.name} ${k.links[0].url}`;return`○ ${k.name}\n${k.links.map(l=>`(${l.label??"영상"}) ${l.url}`).join("\n")}`});return`【 #수업일지 】 ${ds}(${session}차)\n\n${entries.join("\n\n")}`}
