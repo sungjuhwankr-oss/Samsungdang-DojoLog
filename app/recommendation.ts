@@ -75,6 +75,7 @@ export function recommend(grades:Grade[],count:number,logs:RecommendationLog[],a
  const preferred=candidates.filter(x=>!avoidNames.has(x.k.name)),avoided=candidates.filter(x=>avoidNames.has(x.k.name));
  for(const pool of [preferred,avoided])while(out.length<count){const next=choose(pool,true);if(!next)break;out.push(next.k);for(const grade of selected){const role=learningRole(next.k.grade,grade);if(role)planCoverage.get(grade)![role]++}}
  for(const pool of [preferred,avoided])while(out.length<count){const next=choose(pool,false);if(!next)break;out.push(next.k);for(const grade of selected){const role=learningRole(next.k.grade,grade);if(role)planCoverage.get(grade)![role]++}}
+ if(!ungradedOnly&&out.length<count){const directEntry=KATAS.find(k=>k.name==="맞서한손잡기에서 바로 넣는 2교");if(directEntry&&directEntry.hombu&&canAdd(directEntry))out.push(directEntry)}
  const actualPin=out.filter(isPin).length,actualOther=out.length-actualPin;
  return alternateOrder(out.slice(0,count),actualPin,actualOther);
 }
