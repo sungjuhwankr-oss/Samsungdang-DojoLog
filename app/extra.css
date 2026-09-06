@@ -564,6 +564,13 @@
 .changelog details ul {
   padding: 0 12px 12px 29px;
 }
+.changelog .build-marker {
+  display: block;
+  margin: -4px 12px 12px 29px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
 
 @media (max-width: 380px) {
   .grade-mode label {

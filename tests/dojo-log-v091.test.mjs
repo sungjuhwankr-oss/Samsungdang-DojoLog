@@ -11,6 +11,7 @@ const extraCss = await readFile(new URL("../app/extra.css", import.meta.url), "u
 const data = await readFile(new URL("../app/data.ts", import.meta.url), "utf8");
 const layout = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
 const manifest = JSON.parse(await readFile(new URL("../public/manifest.webmanifest", import.meta.url), "utf8"));
+const serviceWorker = await readFile(new URL("../public/sw.js", import.meta.url), "utf8");
 
 test("uses the v0.9.1 visible brand consistently", () => {
   assert.match(page, /삼성당 DojoLog — 지도자/);
@@ -153,9 +154,22 @@ test("provides grade modes and the v0.9.8 help and change history", () => {
   assert.doesNotMatch(page, /전체 안 바꾸기/);
   assert.match(version, /APP_VERSION = "0\.9\.8"/);
   assert.match(version, /APP_CHANNEL = "beta"/);
+  assert.match(version, /APP_BUILD_LABEL = "Build: v0\.9\.8-r2"/);
+  assert.match(page, /APP_BUILD_LABEL/);
   assert.ok((page.match(/APP_VERSION_LABEL/g) ?? []).length >= 3);
   for (const release of ["v0.9.0","v0.9.1","v0.9.2","v0.9.3","v0.9.4","v0.9.5","v0.9.6","v0.9.7","v0.9.8"]) assert.match(page,new RegExp(release.replaceAll(".","\\.")));
   assert.doesNotMatch(page, /JSON 백업 파일 저장 완성/);
+});
+
+test("marks the r2 bundle and invalidates only owned stale service-worker caches", () => {
+  assert.match(page, /updateViaCache:"none"/);
+  assert.match(page, /registration=>registration\.update\(\)/);
+  assert.match(serviceWorker, /CACHE_PREFIX="samsungdang-dojolog-instructor-"/);
+  assert.match(serviceWorker, /v098-r2/);
+  assert.match(serviceWorker, /self\.skipWaiting\(\)/);
+  assert.match(serviceWorker, /self\.clients\.claim\(\)/);
+  assert.match(serviceWorker, /k\.startsWith\(CACHE_PREFIX\)&&k!==CACHE/);
+  assert.doesNotMatch(serviceWorker, /keys\.filter\(k=>k!==CACHE\)/);
 });
 
 test("provides an anchored help table of contents and contextual return button", () => {
