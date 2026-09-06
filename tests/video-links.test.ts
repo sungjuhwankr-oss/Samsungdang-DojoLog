@@ -17,11 +17,20 @@ test("handles omote-only and ura-only links",()=>{
  assert.deepEqual(videoActions([ura]),[{kind:"ura",label:"영상(우라)",url:ura.url}]);
 });
 
-test("uses one generic action for unlabeled or legacy-numbered links",()=>{
+test("uses one generic action for a single unlabeled or legacy-numbered link",()=>{
  const generic={url:"https://youtu.be/generic"};
  const numbered={label:"1",url:"https://youtu.be/numbered"};
  assert.deepEqual(videoActions([generic]),[{kind:"generic",label:"영상",url:generic.url}]);
  assert.deepEqual(videoActions([numbered]),[{kind:"generic",label:"영상",url:numbered.url}]);
+});
+
+test("keeps multiple generic videos available without inventing omote or ura labels",()=>{
+ const first={label:"1",url:"https://youtu.be/generic?t=1"};
+ const second={label:"2",url:"https://youtu.be/generic?t=2"};
+ assert.deepEqual(videoActions([first,second]),[
+  {kind:"generic-1",label:"영상 1",url:first.url},
+  {kind:"generic-2",label:"영상 2",url:second.url}
+ ]);
 });
 
 test("omits invalid and absent video links",()=>{

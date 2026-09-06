@@ -1,4 +1,4 @@
-import {KATAS,highestNumericGrade,type Grade,type Kata,type NumericGrade} from "./data";
+import {EXAM_GROUPS,KATAS,highestNumericGrade,type Grade,type Kata,type NumericGrade} from "./data";
 
 export type GradeMode="highest"|"balanced";
 export type RecommendationLog={status:"완료"|"취소";recordType?:"detailed"|"sessionOnly";session?:number;katas:Kata[]};
@@ -12,6 +12,15 @@ export const REPRESENTATIVE_KATAS:Record<string,string[]>={
  "십자던지기":["한손양손잡기 십자던지기"],"허리던지기":["뒤양손잡기 허리던지기"],"합기떨어뜨리기":["뒤양손잡기 합기떨어뜨리기"]
 };
 
+export const UNGRADED_BEGINNER_SAFE_NAMES=[
+ "뒤양손잡기 호흡던지기",
+ "한손양손잡기 호흡던지기",
+ "횡면타 호흡던지기"
+] as const;
+const UNGRADED_INITIAL_NAMES=new Set(EXAM_GROUPS[9].kata);
+const UNGRADED_PREVIEW_NAMES=new Set(EXAM_GROUPS[8].kata);
+const UNGRADED_BEGINNER_SAFE_SET=new Set<string>(UNGRADED_BEGINNER_SAFE_NAMES);
+
 const DIRECT_RELATIONS=[["1교","입신던지기"],["1교","허리던지기"],["1교","십자던지기"],["2교","사방던지기"],["2교","손목뒤집기"],["2교","내회전던지기"],["2교","외회전던지기"],["3교","허리던지기"]];
 const NEAR_RELATIONS=[["1교","4교"],["1교","5교"],["4교","5교"],["2교","5교"],["3교","4교"],["입신던지기","천지던지기"],["입신던지기","손목뒤집기"],["입신던지기","입기 호흡법"],["사방던지기","손목뒤집기"]];
 
@@ -21,6 +30,8 @@ export function isPin(k:Kata){return/^[1-5]교$/.test(k.technique)}
 export function recentDetailed<T extends RecommendationLog>(logs:T[]){return logs.filter(log=>log.status==="완료"&&(log.recordType??"detailed")==="detailed"&&typeof log.session==="number").sort((a,b)=>(b.session??0)-(a.session??0)).slice(0,10)}
 export type LearningRole="review"|"preview"|"initial";
 export function learningRole(kataGrade:NumericGrade|undefined,participant:Grade):LearningRole|null{if(!kataGrade)return null;if(participant==="ungraded")return kataGrade===9?"initial":null;if(kataGrade>=participant)return"review";if(participant>1&&kataGrade===participant-1)return"preview";return null}
+export function isUngradedOnly(grades:Grade[]){return grades.length>0&&grades.every(grade=>grade==="ungraded")}
+export function ungradedLearningStage(k:Kata):"initial"|"preview"|"beginnerSafe"|null{if(UNGRADED_INITIAL_NAMES.has(k.name))return"initial";if(UNGRADED_PREVIEW_NAMES.has(k.name))return"preview";if(UNGRADED_BEGINNER_SAFE_SET.has(k.name))return"beginnerSafe";return null}
 
 function techniqueKey(k:Kata){return k.technique==="호흡법"?"입기 호흡법":k.technique}
 function related(a:string,b:string,pairs:string[][]){return pairs.some(pair=>pair.includes(a)&&pair.includes(b))}
@@ -38,13 +49,13 @@ function alternateOrder(items:Kata[],pinTarget:number,otherTarget:number){
 
 export function recommend(grades:Grade[],count:number,logs:RecommendationLog[],avoidNames=new Set<string>(),mode:GradeMode="balanced"):Kata[]{
  if(!grades.length)return[];
- const highest=highestNumericGrade(grades),focusGrade=highest??9,recentLogs=recentDetailed(logs),recentKatas=recentLogs.flatMap(log=>log.katas),recentNames=recentKatas.map(k=>k.name);
+ const ungradedOnly=isUngradedOnly(grades),highest=highestNumericGrade(grades),focusGrade=highest??9,recentLogs=recentDetailed(logs),recentKatas=recentLogs.flatMap(log=>log.katas),recentNames=recentKatas.map(k=>k.name);
  const selected=[...grades].sort((a,b)=>a==="ungraded"?-1:b==="ungraded"?1:a-b),participantWeight=(grade:Grade)=>selected.length===1?1:mode==="highest"?(grade===highest?2.5:0.65):1;
  const history=new Map(selected.map(grade=>[grade,{review:recentKatas.filter(k=>learningRole(k.grade,grade)==="review").length,preview:recentKatas.filter(k=>learningRole(k.grade,grade)==="preview").length,initial:recentKatas.filter(k=>learningRole(k.grade,grade)==="initial").length}]));
  const previewCeiling=highest===undefined?1:highest>1?highest-1:1;
- const candidates=KATAS.filter(k=>(k.area==="일반 체술"||k.area==="호흡력")&&k.name!=="좌기 호흡법"&&k.name!=="엇서한손잡기 구석던지기"&&k.hombu&&(!k.grade||k.grade>=previewCeiling)).map(k=>({
+ const candidates=KATAS.filter(k=>(k.area==="일반 체술"||k.area==="호흡력")&&k.name!=="좌기 호흡법"&&k.name!=="엇서한손잡기 구석던지기"&&k.name!=="맞서한손잡기에서 바로 넣는 2교"&&k.hombu&&(ungradedOnly?ungradedLearningStage(k)!==null:(!k.grade||k.grade>=previewCeiling))).map(k=>({
   k,
-  base:30+(k.exam?20:0)+(k.grade===focusGrade?16:0)+(k.form!=="입기"?14:0)-recentNames.filter(name=>name===k.name).length*18+(k.links.length?2:0)
+  base:30+(k.exam?20:0)+(k.grade===focusGrade?16:0)+(k.form!=="입기"?14:0)-recentNames.filter(name=>name===k.name).length*18+(k.links.length?2:0)+(ungradedOnly?(ungradedLearningStage(k)==="initial"?24:ungradedLearningStage(k)==="preview"?10:0):0)
  }));
  const baseSort=(a:{k:Kata;base:number},b:{k:Kata;base:number})=>b.base-a.base||Number(isRepresentative(b.k))-Number(isRepresentative(a.k))||techniqueOrder(a.k)-techniqueOrder(b.k)||a.k.name.localeCompare(b.k.name,"ko");
  candidates.sort(baseSort);
@@ -53,7 +64,7 @@ export function recommend(grades:Grade[],count:number,logs:RecommendationLog[],a
  let pinTarget=half,otherTarget=half;
  if(count%2){if(recentPin<recentOther)pinTarget++;else if(recentOther<recentPin)otherTarget++;else{const firstPin=candidates.find(x=>isPin(x.k)),firstOther=candidates.find(x=>!isPin(x.k));if((firstPin?.base??-Infinity)>=(firstOther?.base??-Infinity))pinTarget++;else otherTarget++}}
  const out:Kata[]=[],planCoverage=new Map(selected.map(grade=>[grade,{review:0,preview:0,initial:0}]));
- const canAdd=(k:Kata)=>out.filter(item=>item.technique===k.technique).length<2&&out.filter(item=>item.attack===k.attack).length<2;
+ const diversityLimit=ungradedOnly?3:2,canAdd=(k:Kata)=>out.filter(item=>item.technique===k.technique).length<diversityLimit&&out.filter(item=>item.attack===k.attack).length<diversityLimit;
  const coverageGain=(k:Kata)=>selected.reduce((sum,grade)=>{const role=learningRole(k.grade,grade);if(!role)return sum;const recent=history.get(grade)![role],planned=planCoverage.get(grade)![role],priority=role==="preview"?6:12;return sum+participantWeight(grade)*priority*(1+1/(1+recent))/(1+planned)},0);
  const relationGain=(k:Kata)=>out.reduce((sum,item)=>sum+(related(techniqueKey(k),techniqueKey(item),DIRECT_RELATIONS)?2:0)+(related(techniqueKey(k),techniqueKey(item),NEAR_RELATIONS)?1:0),0);
  const choose=(pool:typeof candidates,observeTargets:boolean)=>{

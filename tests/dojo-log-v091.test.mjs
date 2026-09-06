@@ -168,10 +168,22 @@ test("provides an anchored help table of contents and contextual return button",
   assert.match(page, /id="help-toc"/);
   assert.match(page, /new IntersectionObserver/);
   assert.match(page, /scrollIntoView\(\{behavior:"smooth",block:"start"\}\)/);
-  assert.match(page, /className="help-toc-fab"/);
+  assert.match(page, /className="help-toc-fab floating-return-button"/);
   assert.match(page, /목차 ↑/);
   assert.match(extraCss, /scroll-margin-top:\s*86px/);
   assert.match(extraCss, /bottom:\s*calc\(84px \+ env\(safe-area-inset-bottom\)\)/);
+});
+
+test("reuses the contextual floating return button across the four main menus", () => {
+  assert.match(page, /function FloatingReturnButton/);
+  assert.match(page, /document\.documentElement\.scrollHeight>window\.innerHeight\+8/);
+  assert.match(page, /window\.scrollY>160/);
+  assert.match(page, /window\.addEventListener\("scroll",update,\{passive:true\}\)/);
+  assert.match(page, /tab!=="help"&&<FloatingReturnButton key=\{tab\}/);
+  assert.match(page, /label="맨 위 ↑"/);
+  assert.match(page, /window\.scrollTo\(\{top:0,behavior:"smooth"\}\)/);
+  assert.match(page, /label="목차 ↑"/);
+  assert.match(extraCss, /\.menu-top-observer/);
 });
 
 test("uses balanced-first semantic radios without changing the grade mode contract", () => {

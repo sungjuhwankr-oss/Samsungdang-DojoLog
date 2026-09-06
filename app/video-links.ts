@@ -1,8 +1,8 @@
 import type { VideoLink } from "./data";
 
 export type VideoAction = {
-  kind: "omote" | "ura" | "generic";
-  label: "영상(오모테)" | "영상(우라)" | "영상";
+  kind: "omote" | "ura" | "generic" | `generic-${number}`;
+  label: "영상(오모테)" | "영상(우라)" | "영상" | `영상 ${number}`;
   url: string;
 };
 
@@ -20,7 +20,9 @@ export function videoActions(links: VideoLink[]): VideoAction[] {
     ].filter((action): action is VideoAction => Boolean(action));
   }
 
-  return valid[0]
-    ? [{ kind: "generic", label: "영상", url: valid[0].url }]
-    : [];
+  const generic = valid.filter((link,index,items)=>items.findIndex(item=>item.url===link.url)===index);
+  if (generic.length === 1) {
+    return [{ kind: "generic", label: "영상", url: generic[0].url }];
+  }
+  return generic.map((link,index)=>({kind:`generic-${index+1}` as const,label:`영상 ${index+1}` as const,url:link.url}));
 }

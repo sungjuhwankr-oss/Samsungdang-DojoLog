@@ -390,6 +390,11 @@
   box-shadow: 0 5px 18px rgba(20, 45, 34, 0.15);
   backdrop-filter: blur(10px);
 }
+.menu-top-observer {
+  height: 1px;
+  margin-bottom: -1px;
+  pointer-events: none;
+}
 .help-screen .guide h3,
 .help-screen .guide p,
 .help-screen .guide ol,

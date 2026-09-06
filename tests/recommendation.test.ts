@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {isPin,learningRole,recentDetailed,recommend} from "../app/recommendation";
+import {isPin,learningRole,recentDetailed,recommend,ungradedLearningStage} from "../app/recommendation";
 import {formatGrade,gradeProgressionOrder,highestNumericGrade,sortGrades} from "../app/data";
 
 test("review and preview roles follow the selected grade",()=>{
@@ -67,11 +67,25 @@ test("a single selected grade behaves consistently in both grade modes",()=>{
 });
 
 test("ungraded-only recommendations are safe and consistent in both modes",()=>{
- const balanced=recommend(["ungraded"],5,[],new Set(),"balanced");
- const highest=recommend(["ungraded"],5,[],new Set(),"highest");
- assert.equal(balanced.length,5);
- assert.deepEqual(balanced.map(k=>k.name),highest.map(k=>k.name));
- assert.ok(balanced.some(k=>k.grade===9));
+ for(const count of [5,7]){
+  const balanced=recommend(["ungraded"],count,[],new Set(),"balanced");
+  const repeated=recommend(["ungraded"],count,[],new Set(),"balanced");
+  const highest=recommend(["ungraded"],count,[],new Set(),"highest");
+  assert.equal(balanced.length,count);
+  assert.equal(new Set(balanced.map(k=>k.id)).size,count);
+  assert.ok(balanced.every(k=>ungradedLearningStage(k)!==null));
+  assert.ok(balanced.every(k=>k.name!=="좌기 호흡법"&&k.name!=="엇서한손잡기 구석던지기"&&k.name!=="맞서한손잡기에서 바로 넣는 2교"));
+  assert.deepEqual(balanced.map(k=>k.name),repeated.map(k=>k.name));
+  assert.deepEqual(balanced.map(k=>k.name),highest.map(k=>k.name));
+  assert.equal(ungradedLearningStage(balanced[0]),"initial");
+ }
+});
+
+test("ungraded-only shortage never adds advanced or duplicate katas",()=>{
+ const result=recommend(["ungraded"],10,[],new Set(),"balanced");
+ assert.equal(result.length,7);
+ assert.equal(new Set(result.map(k=>k.id)).size,result.length);
+ assert.ok(result.every(k=>ungradedLearningStage(k)!==null));
 });
 
 test("mixed ungraded recommendations retain numeric highest focus and determinism",()=>{
@@ -83,7 +97,20 @@ test("mixed ungraded recommendations retain numeric highest focus and determinis
  assert.ok(first.some(k=>k.grade===9));
 });
 
+test("mixed ungraded and seventh-grade lessons do not receive the ungraded-only cap",()=>{
+ const result=recommend(["ungraded",7],7,[],new Set(),"balanced");
+ assert.equal(result.length,7);
+ assert.ok(result.some(k=>ungradedLearningStage(k)===null));
+ assert.ok(result.some(k=>k.grade===6));
+});
+
 test("numeric-only v0.9.7 fixtures remain unchanged",()=>{
  assert.deepEqual(recommend([7,5,3,2],5,[],new Set(),"balanced").map(k=>k.name),["좌기 정면타 1교","뒤양손잡기 입신던지기","뒤양손잡기 1교","반신반립 양손잡기 사방던지기","좌기 정면타 4교"]);
  assert.deepEqual(recommend([7,5,3,2],5,[],new Set(),"highest").map(k=>k.name),["좌기 정면타 1교","반신반립 양손잡기 사방던지기","좌기 정면타 4교","반신반립 엇서한손잡기 사방던지기","횡면타 5교"]);
+ const singleGradeFixtures={
+  7:["뒤양손잡기 입신던지기","좌기 정면타 1교","맞서한손잡기 입신던지기","정면타 1교","맞서한손잡기 손목뒤집기"],
+  5:["반신반립 양손잡기 사방던지기","좌기 정면타 2교","반신반립 엇서한손잡기 사방던지기","좌기 정면타 1교","찌르기 손목뒤집기"],
+  2:["좌기 정면타 4교","한손양손잡기 호흡법","좌기 정면타 5교","반신반립 양손잡기 사방던지기","횡면타 5교"]
+ } as const;
+ for(const grade of [7,5,2] as const)for(const mode of ["balanced","highest"] as const)assert.deepEqual(recommend([grade],5,[],new Set(),mode).map(k=>k.name),singleGradeFixtures[grade]);
 });
