@@ -35,6 +35,8 @@ public final class SaveActivity extends MainActivity {
             field.setAccessible(true);
             appWebView = (WebView) field.get(this);
             appWebView.addJavascriptInterface(this, "SamsungdangBackupBridge");
+            // Injected interfaces become visible to JavaScript on the next page load.
+            appWebView.reload();
         } catch (Exception error) {
             throw new IllegalStateException("Unable to attach backup bridge", error);
         }
@@ -47,29 +49,44 @@ public final class SaveActivity extends MainActivity {
 
     @JavascriptInterface
     public void saveJson(final String filename, final String content) {
-        if (!isTrustedAppPage() || filename == null || content == null) return;
+        if (filename == null || content == null) return;
         runOnUiThread(new Runnable() {
             @Override public void run() {
-                pendingFilename = filename.endsWith(".json") ? filename : filename + ".json";
-                pendingContent = content;
-                Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-                intent.addCategory(Intent.CATEGORY_OPENABLE);
-                intent.setType("application/json");
-                intent.putExtra(Intent.EXTRA_TITLE, pendingFilename);
-                startActivityForResult(intent, CREATE_BACKUP);
+                try {
+                    if (!isTrustedAppPage()) {
+                        emit("save", "error", null, null);
+                        return;
+                    }
+                    pendingFilename = filename.endsWith(".json") ? filename : filename + ".json";
+                    pendingContent = content;
+                    Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("application/json");
+                    intent.putExtra(Intent.EXTRA_TITLE, pendingFilename);
+                    startActivityForResult(intent, CREATE_BACKUP);
+                } catch (Exception error) {
+                    emit("save", "error", null, null);
+                }
             }
         });
     }
 
     @JavascriptInterface
     public void openJson() {
-        if (!isTrustedAppPage()) return;
         runOnUiThread(new Runnable() {
             @Override public void run() {
-                Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                intent.addCategory(Intent.CATEGORY_OPENABLE);
-                intent.setType("application/json");
-                startActivityForResult(intent, OPEN_BACKUP);
+                try {
+                    if (!isTrustedAppPage()) {
+                        emit("open", "error", null, null);
+                        return;
+                    }
+                    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("application/json");
+                    startActivityForResult(intent, OPEN_BACKUP);
+                } catch (Exception error) {
+                    emit("open", "error", null, null);
+                }
             }
         });
     }

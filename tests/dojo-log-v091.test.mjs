@@ -53,7 +53,7 @@ test("uses shared, state-preserving omote and ura video actions", () => {
   assert.ok((page.match(/<VideoButtons kata=/g) ?? []).length >= 2);
   assert.match(page, /function openVideo\(url:string\)/);
   assert.match(page, /sessionStorage\.setItem\(VIEW_KEY/);
-  assert.match(page, /\{tab,query,examGrade,scrollY:window\.scrollY\}/);
+  assert.match(page, /\{tab,query,selectedCategory,examGrade,scrollY:window\.scrollY,planner:/);
   assert.match(page, /window\.location\.assign\(url\)/);
   assert.match(page, /onClick=\{\(\)=>onOpen\(action\.url\)\}/);
   assert.doesNotMatch(page, /영상 없음/);
@@ -125,6 +125,27 @@ test("uses a native SAF bridge first and keeps browser file fallbacks", () => {
   assert.match(nativeBridge, /StandardCharsets\.UTF_8/);
   assert.match(nativeBridge, /@JavascriptInterface/);
   assert.doesNotMatch(nativeBridge, /MANAGE_EXTERNAL_STORAGE|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE/);
+});
+
+test("runs native bridge WebView checks on the Android UI thread", () => {
+  const savePath = nativeBridge.slice(nativeBridge.indexOf("public void saveJson"), nativeBridge.indexOf("public void openJson"));
+  const openPath = nativeBridge.slice(nativeBridge.indexOf("public void openJson"), nativeBridge.indexOf("protected void onActivityResult"));
+  assert.ok(savePath.indexOf("runOnUiThread") < savePath.indexOf("isTrustedAppPage"));
+  assert.ok(openPath.indexOf("runOnUiThread") < openPath.indexOf("isTrustedAppPage"));
+  assert.match(savePath, /catch \(Exception error\) \{\s*emit\("save", "error"/);
+  assert.match(openPath, /catch \(Exception error\) \{\s*emit\("open", "error"/);
+  assert.match(nativeBridge, /addJavascriptInterface\(this, "SamsungdangBackupBridge"\);\s*\/\/[^\n]+\s*appWebView\.reload\(\);/);
+});
+
+test("preserves an unconfirmed class plan across video navigation", () => {
+  for (const field of ["date","participants","gradeMode","generatedParticipants","count","countAdjusted","plan","planDirty","suggestionHistory","note","editingId"]) {
+    assert.match(page, new RegExp(`planner:\\{[^}]*${field}`));
+  }
+  for (const setter of ["setDate","setParticipants","setGradeMode","setGeneratedParticipants","setCount","setCountAdjusted","setPlan","setPlanDirty","setSuggestionHistory","setNote","setEditingId"]) {
+    assert.match(page, new RegExp(`${setter}\\(draft\\.`));
+  }
+  assert.match(page, /setSelectedCategory\(saved\.selectedCategory\)/);
+  assert.match(page, /requestAnimationFrame\(\(\)=>window\.requestAnimationFrame/);
 });
 
 test("keeps restore writes behind validation and explicit confirmation", () => {
