@@ -29,8 +29,10 @@ SHA-256 against the established release certificate before publishing.
    `com.nicron.webview.MainActivity` to
    `com.nicron.webview.SaveActivity`. The activity names have equal encoded
    length, so this release uses an exact in-place binary-string replacement.
-5. Repackage without old `META-INF` signatures, zipalign, and sign with the
-   existing release key.
+5. Repackage without old `META-INF` signatures while preserving the base APK's
+   ZIP methods. In particular, keep `resources.arsc` uncompressed (`stored`)
+   and 4-byte aligned; keep the binary `AndroidManifest.xml` stored as in the
+   base APK. Run zipalign before signing with the existing release key.
 6. Verify package/version/SDK/launcher metadata, v1/v2/v3 signatures,
    certificate identity, both DEX files, permissions, and exact
    `dist/client` to `assets/www` file/content equality. No `_next` files or
