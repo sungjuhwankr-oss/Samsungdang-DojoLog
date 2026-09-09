@@ -615,6 +615,10 @@
   white-space: nowrap;
   font-size: 0.69rem;
 }
+.composition-video-actions {
+  justify-content: flex-start;
+  margin-top: 8px;
+}
 
 .delete-anchor {
   position: relative;
@@ -905,6 +909,29 @@
   color: #76664e;
   font-size: 0.72rem;
   line-height: 1.5;
+}
+.import-confirm {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid #dfc28f;
+  border-radius: 14px;
+  background: #fff;
+}
+.import-confirm h4 { margin: 0 0 10px; }
+.import-confirm dl { margin: 0; }
+.import-confirm dl > div { display: grid; grid-template-columns: 88px 1fr; gap: 8px; padding: 5px 0; }
+.import-confirm dt { color: var(--muted); font-size: .76rem; }
+.import-confirm dd { margin: 0; overflow-wrap: anywhere; font-size: .82rem; }
+.import-confirm p { margin-top: 12px; color: #77511b; font-weight: 750; }
+.import-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.import-confirm-actions button { border: 1px solid var(--line); border-radius: 11px; padding: 9px 14px; background: #fff; font-weight: 800; }
+.import-confirm-actions .primary { border-color: var(--green); background: var(--green); }
+.visually-hidden {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 @media (max-width: 480px) {

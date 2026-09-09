@@ -12,6 +12,9 @@ const data = await readFile(new URL("../app/data.ts", import.meta.url), "utf8");
 const layout = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
 const manifest = JSON.parse(await readFile(new URL("../public/manifest.webmanifest", import.meta.url), "utf8"));
 const serviceWorker = await readFile(new URL("../public/sw.js", import.meta.url), "utf8");
+const backup = await readFile(new URL("../app/backup.ts", import.meta.url), "utf8");
+const backupFile = await readFile(new URL("../app/backup-file.ts", import.meta.url), "utf8");
+const nativeBridge = await readFile(new URL("../android/SaveActivity.java", import.meta.url), "utf8");
 
 test("uses the v0.9.1 visible brand consistently", () => {
   assert.match(page, /삼성당 DojoLog — 지도자/);
@@ -98,23 +101,43 @@ test("regenerates balanced alternatives without changing the established score f
   assert.match(recommendation, /pinTarget=half,otherTarget=half/);
 });
 
-test("exports the complete state through a save picker with explicit feedback", () => {
-  assert.match(page, /showSaveFilePicker/);
-  assert.match(page, /Samsungdang-DojoLog-backup-\$\{dateInputValue\(\)\}\.json/);
-  assert.match(page, /JSON\.stringify\(\{logs,lastSession\},null,2\)/);
-  assert.match(page, /application\/json;charset=utf-8/);
-  assert.match(page, /await handle\.createWritable\(\)/);
-  assert.match(page, /await writable\.write\(data\)/);
-  assert.match(page, /JSON 파일을 내보냈습니다/);
-  assert.match(page, /JSON 파일을 저장하지 못했습니다/);
-  assert.doesNotMatch(page, /URL\.createObjectURL/);
+test("exports and imports the complete state through shared backup adapters", () => {
+  assert.match(page, /serializeBackup\(currentState\(\),APP_VERSION\)/);
+  assert.match(page, /saveBackupFile\(backupFilename\(\),backupJson\(\)\)/);
+  assert.match(page, /openBackupFile\(input\)/);
+  assert.match(page, /parseBackupText\(selected\.content\)/);
+  assert.match(page, /restoreBackupAtomically\(localStorage,pendingImport\.parsed\.state\)/);
+  assert.match(page, /JSON 파일 저장/);
+  assert.match(page, /JSON 백업 불러오기/);
   assert.match(page, /JSON 전체 복사/);
   assert.match(page, /JSON 백업 데이터를 복사했습니다/);
-  assert.match(page, /파일 저장이 취소되었거나 이 WebView에서는 지원되지 않습니다/);
+  assert.match(page, /백업 파일을 저장했습니다/);
+  assert.match(page, /백업 파일을 저장하지 못했습니다/);
+});
+
+test("uses a native SAF bridge first and keeps browser file fallbacks", () => {
+  assert.match(backupFile, /SamsungdangBackupBridge/);
+  assert.match(backupFile, /showSaveFilePicker/);
+  assert.match(backupFile, /URL\.createObjectURL/);
+  assert.match(backupFile, /input\.addEventListener\("cancel"/);
+  assert.match(nativeBridge, /Intent\.ACTION_CREATE_DOCUMENT/);
+  assert.match(nativeBridge, /Intent\.ACTION_OPEN_DOCUMENT/);
+  assert.match(nativeBridge, /StandardCharsets\.UTF_8/);
+  assert.match(nativeBridge, /@JavascriptInterface/);
+  assert.doesNotMatch(nativeBridge, /MANAGE_EXTERNAL_STORAGE|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE/);
+});
+
+test("keeps restore writes behind validation and explicit confirmation", () => {
+  assert.match(backup, /BACKUP_SCHEMA_VERSION = 1/);
+  assert.match(backup, /PREIMPORT_STORAGE_KEY/);
+  assert.match(backup, /storage\.setItem\(PREIMPORT_STORAGE_KEY, safeCurrentRaw\)/);
+  assert.match(backup, /if \(written !== nextRaw\)/);
+  assert.match(page, /pendingImport&&<div className="import-confirm"/);
+  assert.match(page, /이 백업으로 복원하면 현재 앱 데이터가 백업 시점의 데이터로 교체됩니다/);
 });
 
 test("repairs and manually reorders actual-session numbers without changing the storage key", () => {
-  assert.match(page, /KEY="samsungdang-dojolog-instructor-v1"/);
+  assert.match(page, /const KEY=PRIMARY_STORAGE_KEY/);
   assert.match(page, /function reconcileSessions/);
   assert.match(page, /sessions=new Map\(completed\.map\(\(\{log\},index\)=>\[log\.id,1011\+index\]\)\)/);
   assert.match(page, /return reconcileSessions\(normalized\)/);
@@ -143,7 +166,7 @@ test("provides pointer-based drag handles while preserving arrow controls", () =
   assert.match(page, /data-session-order-index=\{index\}/);
 });
 
-test("provides grade modes and the v0.9.8 help and change history", () => {
+test("provides grade modes and the v0.9.9 help and change history", () => {
   assert.match(page, /useState<GradeMode>\("balanced"\)/);
   assert.match(page, /최고 급수 기준/);
   assert.match(page, /선택 급수 균형/);
@@ -155,20 +178,20 @@ test("provides grade modes and the v0.9.8 help and change history", () => {
   for (const step of ["날짜 선택","참가 급수 선택","급수 반영 방식 선택","카타 수 선택","자동 구성","필요하면 구성 수정","수업 후 기록"]) assert.match(page,new RegExp(step));
   assert.match(page, /전체 구성안 다시 만들기/);
   assert.doesNotMatch(page, /전체 안 바꾸기/);
-  assert.match(version, /APP_VERSION = "0\.9\.8"/);
+  assert.match(version, /APP_VERSION = "0\.9\.9"/);
   assert.match(version, /APP_CHANNEL = "beta"/);
-  assert.match(version, /APP_BUILD_LABEL = "Build: v0\.9\.8-r2"/);
+  assert.match(version, /APP_BUILD_LABEL = `Build: v\$\{APP_VERSION\}`/);
   assert.match(page, /APP_BUILD_LABEL/);
   assert.ok((page.match(/APP_VERSION_LABEL/g) ?? []).length >= 3);
-  for (const release of ["v0.9.0","v0.9.1","v0.9.2","v0.9.3","v0.9.4","v0.9.5","v0.9.6","v0.9.7","v0.9.8"]) assert.match(page,new RegExp(release.replaceAll(".","\\.")));
+  for (const release of ["v0.9.0","v0.9.1","v0.9.2","v0.9.3","v0.9.4","v0.9.5","v0.9.6","v0.9.7","v0.9.8","v0.9.9"]) assert.match(page,new RegExp(release.replaceAll(".","\\.")));
   assert.doesNotMatch(page, /JSON 백업 파일 저장 완성/);
 });
 
-test("marks the r2 bundle and invalidates only owned stale service-worker caches", () => {
+test("marks the v0.9.9 bundle and invalidates only owned stale service-worker caches", () => {
   assert.match(page, /updateViaCache:"none"/);
   assert.match(page, /registration=>registration\.update\(\)/);
   assert.match(serviceWorker, /CACHE_PREFIX="samsungdang-dojolog-instructor-"/);
-  assert.match(serviceWorker, /v098-r2/);
+  assert.match(serviceWorker, /v099/);
   assert.match(serviceWorker, /self\.skipWaiting\(\)/);
   assert.match(serviceWorker, /self\.clients\.claim\(\)/);
   assert.match(serviceWorker, /k\.startsWith\(CACHE_PREFIX\)&&k!==CACHE/);
@@ -222,7 +245,7 @@ test("removes journal video counts while preserving kata link data consumers", (
   assert.doesNotMatch(journal, /영상 \{k\.links\.length\}/);
   assert.match(page, /function VideoButtons/);
   assert.match(page, /bandText\(log\.date,log\.session,log\.katas\)/);
-  assert.match(page, /JSON\.stringify\(\{logs,lastSession\},null,2\)/);
+  assert.match(page, /serializeBackup\(currentState\(\),APP_VERSION\)/);
 });
 
 test("adds backward-compatible ungraded participants without changing exam targets", () => {

@@ -1,0 +1,20 @@
+{
+  "format": "samsungdang-dojolog-instructor-backup",
+  "schemaVersion": 1,
+  "appVersion": "0.9.9",
+  "exportedAt": "2026-09-08T20:22:00.000Z",
+  "data": {
+    "logs": [
+      {
+        "id": "preview-restore-fixture",
+        "date": "2026-09-08",
+        "status": "취소",
+        "participants": ["ungraded"],
+        "katas": [],
+        "note": "preview restore fixture",
+        "createdAt": "2026-09-08T20:22:00.000Z"
+      }
+    ],
+    "lastSession": 1010
+  }
+}

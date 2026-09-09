@@ -1,0 +1,14 @@
+{
+  "logs": [
+    {
+      "id": "legacy-preview-fixture",
+      "date": "2026-09-07",
+      "status": "취소",
+      "participants": [7, 5, 2],
+      "katas": [],
+      "note": "legacy preview fixture",
+      "createdAt": "2026-09-07T20:22:00.000Z"
+    }
+  ],
+  "lastSession": 1010
+}

@@ -6,6 +6,10 @@ export type VideoAction = {
   url: string;
 };
 
+export type CompositionVideoAction = Omit<VideoAction, "label"> & {
+  label: "오모테" | "우라" | "영상" | `영상 ${number}`;
+};
+
 const YOUTUBE_URL = /^https:\/\/(?:www\.)?(?:youtube\.com|youtu\.be)\//;
 
 export function videoActions(links: VideoLink[]): VideoAction[] {
@@ -25,4 +29,11 @@ export function videoActions(links: VideoLink[]): VideoAction[] {
     return [{ kind: "generic", label: "영상", url: generic[0].url }];
   }
   return generic.map((link,index)=>({kind:`generic-${index+1}` as const,label:`영상 ${index+1}` as const,url:link.url}));
+}
+
+export function compositionVideoActions(links: VideoLink[]): CompositionVideoAction[] {
+  return videoActions(links).map((action) => ({
+    ...action,
+    label: action.kind === "omote" ? "오모테" : action.kind === "ura" ? "우라" : action.label,
+  }));
 }
