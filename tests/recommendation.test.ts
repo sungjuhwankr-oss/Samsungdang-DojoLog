@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {isPin,learningRole,recentDetailed,recommend,ungradedLearningStage} from "../app/recommendation";
-import {formatGrade,gradeProgressionOrder,highestNumericGrade,sortGrades} from "../app/data";
+import {EMPTY_SPECIAL_KATA_OPTIONS,SPECIAL_KATA_POOLS,isPin,learningRole,recentDetailed,recommend,recommendSpecialKatas,recommendWithSpecialKatas,ungradedLearningStage,type SpecialKataOptions} from "../app/recommendation";
+import {KATAS,formatGrade,gradeProgressionOrder,highestNumericGrade,sortGrades} from "../app/data";
 
 test("review and preview roles follow the selected grade",()=>{
  assert.equal(learningRole(9,7),"review");
@@ -113,4 +113,59 @@ test("numeric-only v0.9.7 fixtures remain unchanged",()=>{
   2:["좌기 정면타 4교","한손양손잡기 호흡법","좌기 정면타 5교","반신반립 양손잡기 사방던지기","횡면타 5교"]
  } as const;
  for(const grade of [7,5,2] as const)for(const mode of ["balanced","highest"] as const)assert.deepEqual(recommend([grade],5,[],new Set(),mode).map(k=>k.name),singleGradeFixtures[grade]);
+});
+
+const specialNames=new Set<string>(Object.values(SPECIAL_KATA_POOLS).flat());
+const option=(values:Partial<SpecialKataOptions>):SpecialKataOptions=>({...EMPTY_SPECIAL_KATA_OPTIONS,...values});
+
+test("special options off preserve the exact established recommendation results",()=>{
+ for(const grades of [[7],[5],[2],[7,5,3,2]] as const)for(const mode of ["balanced","highest"] as const){
+  const direct=recommend([...grades],5,[],new Set(),mode);
+  const combined=recommendWithSpecialKatas([...grades],5,[],EMPTY_SPECIAL_KATA_OPTIONS,new Set(),mode);
+  assert.deepEqual(combined.map(k=>k.name),direct.map(k=>k.name));
+ }
+});
+
+test("each special option contributes exactly one kata from its own pool",()=>{
+ const cases=[
+  {options:option({twoPerson:true}),pool:SPECIAL_KATA_POOLS.twoPerson},
+  {options:option({swordKnife:true}),pool:SPECIAL_KATA_POOLS.swordKnife},
+  {options:option({staff:true}),pool:SPECIAL_KATA_POOLS.staff}
+ ] as const;
+ for(const {options,pool} of cases){
+  const result=recommendWithSpecialKatas([5],5,[],options);
+  const selected=result.filter(k=>specialNames.has(k.name));
+  assert.equal(result.length,5);
+  assert.equal(selected.length,1);
+  assert.ok(pool.includes(selected[0].name as never));
+ }
+});
+
+test("multiple special options use one slot each within weekday and Saturday totals",()=>{
+ const two=option({twoPerson:true,swordKnife:true}),all=option({twoPerson:true,swordKnife:true,staff:true});
+ assert.equal(recommendWithSpecialKatas([5],5,[],two).filter(k=>specialNames.has(k.name)).length,2);
+ for(const count of [5,7]){
+  const result=recommendWithSpecialKatas([5],count,[],all);
+  assert.equal(result.length,count);
+  assert.equal(result.filter(k=>specialNames.has(k.name)).length,3);
+  assert.equal(new Set(result.map(k=>k.id)).size,count);
+ }
+});
+
+test("special pools avoid recent individual katas deterministically without weapon quotas",()=>{
+ const first=KATAS.find(k=>k.name===SPECIAL_KATA_POOLS.swordKnife[0])!;
+ const log={status:"완료" as const,recordType:"detailed" as const,session:1011,katas:[first]};
+ const selected=recommendSpecialKatas(option({swordKnife:true}),[log]);
+ assert.equal(selected[0].name,SPECIAL_KATA_POOLS.swordKnife[1]);
+ assert.ok(selected[0].name.startsWith("단도 뺏기 "));
+ const repeated=recommendSpecialKatas(option({swordKnife:true}),[log]);
+ assert.deepEqual(repeated.map(k=>k.name),selected.map(k=>k.name));
+});
+
+test("regeneration avoidance rotates candidates inside each active special pool",()=>{
+ const options=option({twoPerson:true,swordKnife:true,staff:true});
+ const first=recommendSpecialKatas(options,[]),second=recommendSpecialKatas(options,[],new Set(first.map(k=>k.name)));
+ assert.equal(first.length,3);
+ assert.equal(second.length,3);
+ assert.ok(second.every(k=>!first.some(previous=>previous.name===k.name)));
 });

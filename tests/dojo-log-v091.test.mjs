@@ -141,7 +141,7 @@ test("runs native bridge WebView checks on the Android UI thread", () => {
 });
 
 test("preserves an unconfirmed class plan across video navigation", () => {
-  for (const field of ["date","participants","gradeMode","generatedParticipants","count","countAdjusted","plan","planDirty","suggestionHistory","note","editingId"]) {
+  for (const field of ["date","participants","gradeMode","specialOptions","generatedParticipants","generatedSpecialOptions","count","countAdjusted","plan","planDirty","suggestionHistory","note","editingId"]) {
     assert.match(page, new RegExp(`planner:\\{[^}]*${field}`));
   }
   for (const setter of ["setDate","setParticipants","setGradeMode","setGeneratedParticipants","setCount","setCountAdjusted","setPlan","setPlanDirty","setSuggestionHistory","setNote","setEditingId"]) {
@@ -149,6 +149,22 @@ test("preserves an unconfirmed class plan across video navigation", () => {
   }
   assert.match(page, /setSelectedCategory\(saved\.selectedCategory\)/);
   assert.match(page, /requestAnimationFrame\(\(\)=>window\.requestAnimationFrame/);
+});
+
+test("starts with no participant grade while restoring valid video-return selections", () => {
+  assert.match(page, /useState<Grade\[\]>\(\[\]\)/);
+  assert.match(page, /setParticipants\(\[\]\)/);
+  assert.doesNotMatch(page, /useState<Grade\[\]>\(\[9,7,5,2\]\)/);
+  assert.match(page, /Array\.isArray\(draft\.participants\)\)setParticipants\(draft\.participants\)/);
+});
+
+test("provides three manual special-kata options without changing the base recommender", () => {
+  assert.match(page, /유단자 2인 이상/);
+  assert.match(page, /검\/단도/);
+  assert.match(page, /특수 카타 조건/);
+  assert.match(page, /recommendWithSpecialKatas/);
+  assert.match(recommendation, /if\(activeSpecialOptionCount\(options\)===0\)return recommend\(grades,count,logs,avoidNames,mode\)/);
+  assert.doesNotMatch(recommendation, /Math\.random/);
 });
 
 test("keeps restore writes behind validation and explicit confirmation", () => {

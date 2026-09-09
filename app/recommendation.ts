@@ -2,6 +2,14 @@ import {EXAM_GROUPS,KATAS,highestNumericGrade,type Grade,type Kata,type NumericG
 
 export type GradeMode="highest"|"balanced";
 export type RecommendationLog={status:"완료"|"취소";recordType?:"detailed"|"sessionOnly";session?:number;katas:Kata[]};
+export type SpecialKataOptions={twoPerson:boolean;swordKnife:boolean;staff:boolean};
+
+export const EMPTY_SPECIAL_KATA_OPTIONS:SpecialKataOptions={twoPerson:false,swordKnife:false,staff:false};
+export const SPECIAL_KATA_POOLS={
+ twoPerson:["2인 잡기 사방던지기","2인 잡기 호흡던지기 1","2인 잡기 호흡던지기 2"],
+ swordKnife:["단도 뺏기 좌기 정면타 5교","단도 뺏기 횡면타 5교","단도 뺏기 찌르기 팔꿈치굳히기(6교)","단도 뺏기 찌르기 손목뒤집기","단도 뺏기 횡면타 사방던지기","검 뺏기 손목뒤집기","검 뺏기 호흡던지기"],
+ staff:["장 뺏기 입신던지기","장 뺏기 호흡던지기","장 뺏기 사방던지기"]
+} as const;
 
 export const TECH_CATEGORY_ORDER=["1교","2교","3교","4교","5교","입신던지기","사방던지기","손목뒤집기","천지던지기","회전던지기","호흡던지기","입기 호흡법","십자던지기","허리던지기","합기떨어뜨리기"];
 export const REPRESENTATIVE_KATAS:Record<string,string[]>={
@@ -37,6 +45,12 @@ export function categoryOf(k:Kata){if(k.name==="엇서한손잡기 구석던지�
 export function techniqueOrder(k:Kata){const index=TECH_CATEGORY_ORDER.indexOf(categoryOf(k));return index<0?TECH_CATEGORY_ORDER.length:index}
 export function isPin(k:Kata){return/^[1-5]교$/.test(k.technique)}
 export function recentDetailed<T extends RecommendationLog>(logs:T[]){return logs.filter(log=>log.status==="완료"&&(log.recordType??"detailed")==="detailed"&&typeof log.session==="number").sort((a,b)=>(b.session??0)-(a.session??0)).slice(0,10)}
+export function activeSpecialOptionCount(options:SpecialKataOptions){return Number(options.twoPerson)+Number(options.swordKnife)+Number(options.staff)}
+export function recommendSpecialKatas(options:SpecialKataOptions,logs:RecommendationLog[],avoidNames=new Set<string>()):Kata[]{
+ const recentNames=recentDetailed(logs).flatMap(log=>log.katas.map(k=>k.name));
+ const select=(names:readonly string[])=>names.map((name,index)=>{const kata=KATAS.find(k=>k.name===name),uses=recentNames.filter(item=>item===name).length,last=recentNames.indexOf(name);return{kata,index,uses,last:last<0?Number.MAX_SAFE_INTEGER:last,avoided:avoidNames.has(name)}}).filter((item):item is {kata:Kata;index:number;uses:number;last:number;avoided:boolean}=>!!item.kata).sort((a,b)=>Number(a.avoided)-Number(b.avoided)||a.uses-b.uses||b.last-a.last||a.index-b.index)[0]?.kata;
+ return ([options.twoPerson&&select(SPECIAL_KATA_POOLS.twoPerson),options.swordKnife&&select(SPECIAL_KATA_POOLS.swordKnife),options.staff&&select(SPECIAL_KATA_POOLS.staff)] as (Kata|false|undefined)[]).filter((kata):kata is Kata=>!!kata);
+}
 export type LearningRole="review"|"preview"|"initial";
 export function learningRole(kataGrade:NumericGrade|undefined,participant:Grade):LearningRole|null{if(!kataGrade)return null;if(participant==="ungraded")return kataGrade===9?"initial":null;if(kataGrade>=participant)return"review";if(participant>1&&kataGrade===participant-1)return"preview";return null}
 export function isUngradedOnly(grades:Grade[]){return grades.length>0&&grades.every(grade=>grade==="ungraded")}
@@ -91,4 +105,11 @@ export function recommend(grades:Grade[],count:number,logs:RecommendationLog[],a
  if(!ungradedOnly&&out.length<count){const directEntry=KATAS.find(k=>k.name==="맞서한손잡기에서 바로 넣는 2교");if(directEntry&&directEntry.hombu&&canAdd(directEntry))out.push(directEntry)}
  const actualPin=out.filter(isPin).length,actualOther=out.length-actualPin;
  return alternateOrder(out.slice(0,count),actualPin,actualOther);
+}
+
+export function recommendWithSpecialKatas(grades:Grade[],count:number,logs:RecommendationLog[],options:SpecialKataOptions,avoidNames=new Set<string>(),mode:GradeMode="balanced"):Kata[]{
+ if(!grades.length)return[];
+ if(activeSpecialOptionCount(options)===0)return recommend(grades,count,logs,avoidNames,mode);
+ const special=recommendSpecialKatas(options,logs,avoidNames).slice(0,count),generalCount=Math.max(0,count-special.length);
+ return[...recommend(grades,generalCount,logs,avoidNames,mode),...special];
 }

@@ -323,6 +323,43 @@
   font-size: 0.75rem;
   line-height: 1.5;
 }
+.special-kata-field {
+  min-width: 0;
+  margin: 0;
+  padding: 15px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.special-kata-field .field-label {
+  padding: 0;
+}
+.special-kata-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+.special-kata-options button {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 9px 6px;
+  background: #f8faf9;
+  color: #5d6a64;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+.special-kata-options button.active {
+  border-color: var(--green);
+  background: var(--green2);
+  color: var(--green);
+}
+.special-kata-field > small {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
 .help-screen .guide {
   display: flex;
   flex-direction: column;

@@ -40,3 +40,42 @@ test("eighth-grade basics are not duplicated in later cumulative exam tabs",()=>
   assert.ok(kata.links.length>0);
  }
 });
+
+test("registers the thirteen Hombu special katas with fifteen exact video links",()=>{
+ const expected={
+  "2인 잡기 사방던지기":[[undefined,141]],
+  "2인 잡기 호흡던지기 1":[[undefined,226]],
+  "2인 잡기 호흡던지기 2":[[undefined,306]],
+  "단도 뺏기 좌기 정면타 5교":[["오모테",376],["우라",493]],
+  "단도 뺏기 횡면타 5교":[["오모테",593],["우라",713]],
+  "단도 뺏기 찌르기 팔꿈치굳히기(6교)":[[undefined,819]],
+  "단도 뺏기 찌르기 손목뒤집기":[[undefined,909]],
+  "단도 뺏기 횡면타 사방던지기":[[undefined,989]],
+  "검 뺏기 손목뒤집기":[[undefined,1079]],
+  "검 뺏기 호흡던지기":[[undefined,1149]],
+  "장 뺏기 입신던지기":[[undefined,1219]],
+  "장 뺏기 호흡던지기":[[undefined,1274]],
+  "장 뺏기 사방던지기":[[undefined,1339]]
+ } as const;
+ const special=KATAS.filter(k=>Object.hasOwn(expected,k.name));
+ assert.equal(special.length,13);
+ assert.equal(special.reduce((sum,k)=>sum+k.links.length,0),15);
+ assert.deepEqual([special.filter(k=>k.name.startsWith("2인 잡기 ")).length,special.filter(k=>k.name.startsWith("단도 뺏기 ")).length,special.filter(k=>k.name.startsWith("검 뺏기 ")).length,special.filter(k=>k.name.startsWith("장 뺏기 ")).length],[3,5,2,3]);
+ for(const [name,links] of Object.entries(expected)){
+  const kata=KATAS.find(k=>k.name===name);
+  assert.ok(kata);
+  assert.equal(kata.hombu,true);
+  assert.equal(kata.exam,false);
+  assert.equal(kata.grade,undefined);
+  assert.deepEqual(kata.links.map(link=>[link.label,Number(new URL(link.url).searchParams.get("t"))]),links);
+ }
+ assert.ok(!KATAS.some(k=>/^(단도잡기|검잡기|장잡기)/.test(k.name)));
+ assert.ok(!Object.values(EXAM_GROUPS).some(group=>group.kata.some(name=>Object.hasOwn(expected,name))));
+});
+
+test("finds Hombu special katas through the existing name and technique search fields",()=>{
+ const search=(query:string)=>KATAS.filter(k=>k.hombu&&(k.name.includes(query)||k.technique.includes(query)||k.attack.includes(query)));
+ for(const query of ["2인 잡기","단도 뺏기","검 뺏기","장 뺏기","사방던지기","호흡던지기","5교","6교","팔꿈치굳히기","손목뒤집기","입신던지기"]){
+  assert.ok(search(query).length>0,query);
+ }
+});
