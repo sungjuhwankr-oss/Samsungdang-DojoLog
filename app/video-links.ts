@@ -10,6 +10,12 @@ export type CompositionVideoAction = Omit<VideoAction, "label"> & {
   label: "오모테" | "우라" | "영상" | `영상 ${number}`;
 };
 
+export type VideoNavigationHost = {
+  SamsungdangBackupBridge?: { openExternalUrl?: (url: string) => void };
+  location: { assign: (url: string) => void };
+};
+export type VideoLaunchStamp = { url: string; at: number };
+
 const YOUTUBE_URL = /^https:\/\/(?:www\.)?(?:youtube\.com|youtu\.be)\//;
 
 export function videoActions(links: VideoLink[]): VideoAction[] {
@@ -36,4 +42,18 @@ export function compositionVideoActions(links: VideoLink[]): CompositionVideoAct
     ...action,
     label: action.kind === "omote" ? "오모테" : action.kind === "ura" ? "우라" : action.label,
   }));
+}
+
+export function launchVideoUrl(host: VideoNavigationHost, url: string): "native" | "web" {
+  const openExternalUrl = host.SamsungdangBackupBridge?.openExternalUrl;
+  if (typeof openExternalUrl === "function") {
+    openExternalUrl.call(host.SamsungdangBackupBridge, url);
+    return "native";
+  }
+  host.location.assign(url);
+  return "web";
+}
+
+export function shouldLaunchVideo(last: VideoLaunchStamp | null, url: string, now: number, duplicateWindowMs = 800): boolean {
+  return last?.url !== url || now - last.at >= duplicateWindowMs;
 }

@@ -91,6 +91,33 @@ public final class SaveActivity extends MainActivity {
         });
     }
 
+    @JavascriptInterface
+    public void openExternalUrl(final String url) {
+        if (url == null) return;
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                if (!isTrustedAppPage()) return;
+                try {
+                    Uri uri = Uri.parse(url);
+                    String scheme = uri.getScheme();
+                    String host = uri.getHost();
+                    if (!"https".equalsIgnoreCase(scheme) || !isYouTubeHost(host)) return;
+                    Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+                    intent.addCategory(Intent.CATEGORY_BROWSABLE);
+                    startActivity(intent);
+                } catch (Exception ignored) {
+                }
+            }
+        });
+    }
+
+    private boolean isYouTubeHost(String host) {
+        if (host == null) return false;
+        String normalized = host.toLowerCase();
+        return normalized.equals("youtu.be") || normalized.equals("youtube.com")
+                || normalized.endsWith(".youtube.com");
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);

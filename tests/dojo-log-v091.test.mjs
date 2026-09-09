@@ -54,7 +54,8 @@ test("uses shared, state-preserving omote and ura video actions", () => {
   assert.match(page, /function openVideo\(url:string\)/);
   assert.match(page, /sessionStorage\.setItem\(VIEW_KEY/);
   assert.match(page, /\{tab,query,selectedCategory,examGrade,scrollY:window\.scrollY,planner:/);
-  assert.match(page, /window\.location\.assign\(url\)/);
+  assert.match(page, /launchVideoUrl\(window as unknown as VideoNavigationHost,url\)/);
+  assert.match(page, /lastVideoOpenRef/);
   assert.match(page, /onClick=\{\(\)=>onOpen\(action\.url\)\}/);
   assert.doesNotMatch(page, /영상 없음/);
 });
@@ -122,6 +123,8 @@ test("uses a native SAF bridge first and keeps browser file fallbacks", () => {
   assert.match(backupFile, /input\.addEventListener\("cancel"/);
   assert.match(nativeBridge, /Intent\.ACTION_CREATE_DOCUMENT/);
   assert.match(nativeBridge, /Intent\.ACTION_OPEN_DOCUMENT/);
+  assert.match(nativeBridge, /Intent\.ACTION_VIEW/);
+  assert.match(nativeBridge, /public void openExternalUrl/);
   assert.match(nativeBridge, /StandardCharsets\.UTF_8/);
   assert.match(nativeBridge, /@JavascriptInterface/);
   assert.doesNotMatch(nativeBridge, /MANAGE_EXTERNAL_STORAGE|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE/);
