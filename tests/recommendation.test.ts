@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {EMPTY_SPECIAL_KATA_OPTIONS,SPECIAL_KATA_POOLS,isPin,learningRole,recentDetailed,recommend,recommendSpecialKatas,recommendWithSpecialKatas,ungradedLearningStage,type SpecialKataOptions} from "../app/recommendation";
+import {EMPTY_SPECIAL_KATA_OPTIONS,SPECIAL_KATA_POOLS,effectiveRecommendationGrades,isPin,learningRole,recentDetailed,recommend,recommendSpecialKatas,recommendWithSpecialKatas,ungradedLearningStage,type SpecialKataOptions} from "../app/recommendation";
 import {KATAS,formatGrade,gradeProgressionOrder,highestNumericGrade,sortGrades} from "../app/data";
 
 test("review and preview roles follow the selected grade",()=>{
@@ -123,6 +123,39 @@ test("special options off preserve the exact established recommendation results"
   const direct=recommend([...grades],5,[],new Set(),mode);
   const combined=recommendWithSpecialKatas([...grades],5,[],EMPTY_SPECIAL_KATA_OPTIONS,new Set(),mode);
   assert.deepEqual(combined.map(k=>k.name),direct.map(k=>k.name));
+ }
+});
+
+test("the manual dan condition reuses first-grade recommendation semantics without selecting the first-grade UI value",()=>{
+ const dan=option({twoPerson:true});
+ assert.deepEqual(effectiveRecommendationGrades([],dan),[1]);
+ assert.deepEqual(effectiveRecommendationGrades([7],dan),[7,1]);
+ assert.deepEqual(effectiveRecommendationGrades([7],EMPTY_SPECIAL_KATA_OPTIONS),[7]);
+ const weekday=recommendWithSpecialKatas([],5,[],dan),saturday=recommendWithSpecialKatas([],7,[],dan);
+ for(const [result,count] of [[weekday,5],[saturday,7]] as const){
+  const general=result.filter(k=>!specialNames.has(k.name)),twoPerson=result.filter(k=>SPECIAL_KATA_POOLS.twoPerson.includes(k.name as never));
+  assert.equal(result.length,count);
+  assert.equal(general.length,count-1);
+  assert.equal(twoPerson.length,1);
+  assert.deepEqual(general.map(k=>k.name),recommend([1],count-1,[]).map(k=>k.name));
+ }
+});
+
+test("numeric grades and the manual dan condition combine at first-grade level within fixed slots",()=>{
+ const dan=option({twoPerson:true}),withSeven=recommendWithSpecialKatas([7],5,[],dan);
+ assert.deepEqual(withSeven.filter(k=>!specialNames.has(k.name)).map(k=>k.name),recommend([7,1],4,[]).map(k=>k.name));
+ const cases=[
+  {options:dan,general:4,special:1,count:5},
+  {options:option({twoPerson:true,swordKnife:true}),general:3,special:2,count:5},
+  {options:option({twoPerson:true,staff:true}),general:3,special:2,count:5},
+  {options:option({twoPerson:true,swordKnife:true,staff:true}),general:2,special:3,count:5},
+  {options:option({twoPerson:true,swordKnife:true,staff:true}),general:4,special:3,count:7}
+ ] as const;
+ for(const fixture of cases){
+  const result=recommendWithSpecialKatas([],fixture.count,[],fixture.options);
+  assert.equal(result.length,fixture.count);
+  assert.equal(result.filter(k=>specialNames.has(k.name)).length,fixture.special);
+  assert.equal(result.filter(k=>!specialNames.has(k.name)).length,fixture.general);
  }
 });
 

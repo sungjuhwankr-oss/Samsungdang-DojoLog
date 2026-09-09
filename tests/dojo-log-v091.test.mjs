@@ -158,13 +158,30 @@ test("starts with no participant grade while restoring valid video-return select
   assert.match(page, /Array\.isArray\(draft\.participants\)\)setParticipants\(draft\.participants\)/);
 });
 
-test("provides three manual special-kata options without changing the base recommender", () => {
+test("places the manual dan condition with participant grades and keeps two special-kata options", () => {
   assert.match(page, /유단자 2인 이상/);
   assert.match(page, /검\/단도/);
+  assert.match(page, /function GradePicker\([^\n]+twoPerson/);
+  assert.match(page, /<GradePicker[^\n]+twoPerson=\{specialOptions\.twoPerson\}/);
+  assert.match(page, /const SPECIAL_OPTION_LABELS=\[\['swordKnife','검\/단도'\],\['staff','장'\]\]/);
+  assert.match(page, /disabled=\{!participants\.length&&!specialOptions\.twoPerson\}/);
   assert.match(page, /특수 카타 조건/);
   assert.match(page, /recommendWithSpecialKatas/);
   assert.match(recommendation, /if\(activeSpecialOptionCount\(options\)===0\)return recommend\(grades,count,logs,avoidNames,mode\)/);
+  assert.match(recommendation, /options\.twoPerson&&!grades\.includes\(1\)\?\[\.\.\.grades,1\]:grades/);
   assert.doesNotMatch(recommendation, /Math\.random/);
+});
+
+test("appends explicit Hombu special groups and documents their real behavior", () => {
+  assert.match(page, /HOMBU_SPECIAL_GROUPS=\[\{label:"검\/단도",names:SPECIAL_KATA_POOLS\.swordKnife\},\{label:"장",names:SPECIAL_KATA_POOLS\.staff\},\{label:"2인 잡기",names:SPECIAL_KATA_POOLS\.twoPerson\}\]/);
+  assert.match(page, /curriculumCategories=\[\.\.\.knownCategories,\.\.\.extraCategories,\.\.\.specialCategories\]/);
+  assert.match(page, /curriculum\.filter\(k=>hombuGroup\(k\)===category\)/);
+  assert.match(page, /저장된 선택이 없는 처음 상태에는 급수가 자동으로 선택되지 않습니다/);
+  assert.match(page, /일반 카타에는 1급 참가자가 있는 수업과 같은 수준을 반영/);
+  assert.match(page, /단도 뺏기 5개와 검 뺏기 2개를 합친 후보 중 1개/);
+  assert.match(page, /장 뺏기 3개 중 1개/);
+  assert.match(page, /평일은 총 <strong>5카타<\/strong>, 토요일은 총 <strong>7카타<\/strong>/);
+  assert.match(page, /검\/단도 → 장 → 2인 잡기/);
 });
 
 test("keeps restore writes behind validation and explicit confirmation", () => {

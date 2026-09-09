@@ -46,6 +46,7 @@ export function techniqueOrder(k:Kata){const index=TECH_CATEGORY_ORDER.indexOf(c
 export function isPin(k:Kata){return/^[1-5]교$/.test(k.technique)}
 export function recentDetailed<T extends RecommendationLog>(logs:T[]){return logs.filter(log=>log.status==="완료"&&(log.recordType??"detailed")==="detailed"&&typeof log.session==="number").sort((a,b)=>(b.session??0)-(a.session??0)).slice(0,10)}
 export function activeSpecialOptionCount(options:SpecialKataOptions){return Number(options.twoPerson)+Number(options.swordKnife)+Number(options.staff)}
+export function effectiveRecommendationGrades(grades:Grade[],options:SpecialKataOptions):Grade[]{return options.twoPerson&&!grades.includes(1)?[...grades,1]:grades}
 export function recommendSpecialKatas(options:SpecialKataOptions,logs:RecommendationLog[],avoidNames=new Set<string>()):Kata[]{
  const recentNames=recentDetailed(logs).flatMap(log=>log.katas.map(k=>k.name));
  const select=(names:readonly string[])=>names.map((name,index)=>{const kata=KATAS.find(k=>k.name===name),uses=recentNames.filter(item=>item===name).length,last=recentNames.indexOf(name);return{kata,index,uses,last:last<0?Number.MAX_SAFE_INTEGER:last,avoided:avoidNames.has(name)}}).filter((item):item is {kata:Kata;index:number;uses:number;last:number;avoided:boolean}=>!!item.kata).sort((a,b)=>Number(a.avoided)-Number(b.avoided)||a.uses-b.uses||b.last-a.last||a.index-b.index)[0]?.kata;
@@ -108,8 +109,9 @@ export function recommend(grades:Grade[],count:number,logs:RecommendationLog[],a
 }
 
 export function recommendWithSpecialKatas(grades:Grade[],count:number,logs:RecommendationLog[],options:SpecialKataOptions,avoidNames=new Set<string>(),mode:GradeMode="balanced"):Kata[]{
- if(!grades.length)return[];
  if(activeSpecialOptionCount(options)===0)return recommend(grades,count,logs,avoidNames,mode);
+ const effectiveGrades=effectiveRecommendationGrades(grades,options);
+ if(!effectiveGrades.length)return[];
  const special=recommendSpecialKatas(options,logs,avoidNames).slice(0,count),generalCount=Math.max(0,count-special.length);
- return[...recommend(grades,generalCount,logs,avoidNames,mode),...special];
+ return[...recommend(effectiveGrades,generalCount,logs,avoidNames,mode),...special];
 }
