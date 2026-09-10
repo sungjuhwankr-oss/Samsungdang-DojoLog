@@ -159,17 +159,26 @@ test("starts with no participant grade while restoring valid video-return select
 });
 
 test("places the manual dan condition with participant grades and keeps two special-kata options", () => {
-  assert.match(page, /유단자 2인 이상/);
+  assert.match(page, />★유단자 2인 이상<\/button>/);
   assert.match(page, /검\/단도/);
   assert.match(page, /function GradePicker\([^\n]+twoPerson/);
   assert.match(page, /<GradePicker[^\n]+twoPerson=\{specialOptions\.twoPerson\}/);
+  assert.match(page, /className=\{twoPerson\?"grade active":"grade"\}/);
   assert.match(page, /const SPECIAL_OPTION_LABELS=\[\['swordKnife','검\/단도'\],\['staff','장'\]\]/);
   assert.match(page, /disabled=\{!participants\.length&&!specialOptions\.twoPerson\}/);
+  assert.doesNotMatch(extraCss, /dan-condition-row/);
   assert.match(page, /특수 카타 조건/);
   assert.match(page, /recommendWithSpecialKatas/);
   assert.match(recommendation, /if\(activeSpecialOptionCount\(options\)===0\)return recommend\(grades,count,logs,avoidNames,mode\)/);
   assert.match(recommendation, /options\.twoPerson&&!grades\.includes\(1\)\?\[\.\.\.grades,1\]:grades/);
   assert.doesNotMatch(recommendation, /Math\.random/);
+});
+
+test("resets only the four reference views to the window top on every activation", () => {
+  assert.match(page, /SCROLL_RESET_TABS:Tab\[\]=\["logs","hombu","exam","help"\]/);
+  assert.match(page, /useEffect\(\(\)=>\{if\(SCROLL_RESET_TABS\.includes\(tab\)\)window\.scrollTo\(0,0\)\},\[tab\]\)/);
+  assert.match(page, /SCROLL_RESET_TABS\.includes\(saved\.tab\)\?0:Number\(saved\.scrollY\)\|\|0/);
+  assert.doesNotMatch(page, /SCROLL_RESET_TABS:Tab\[\]=\[[^\]]*"today"/);
 });
 
 test("appends explicit Hombu special groups and documents their real behavior", () => {
@@ -182,6 +191,7 @@ test("appends explicit Hombu special groups and documents their real behavior", 
   assert.match(page, /장 뺏기 3개 중 1개/);
   assert.match(page, /평일은 총 <strong>5카타<\/strong>, 토요일은 총 <strong>7카타<\/strong>/);
   assert.match(page, /검\/단도 → 장 → 2인 잡기/);
+  assert.match(page, /<strong>★유단자 2인 이상<\/strong>/);
 });
 
 test("keeps restore writes behind validation and explicit confirmation", () => {

@@ -333,20 +333,12 @@
 .special-kata-field .field-label {
   padding: 0;
 }
-.special-kata-options,
-.dan-condition-row {
+.special-kata-options {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 7px;
 }
-.dan-condition-row {
-  margin-top: 8px;
-}
-.dan-condition-row button {
-  grid-column: 1 / -1;
-}
-.special-kata-options button,
-.dan-condition-row button {
+.special-kata-options button {
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: 11px;
@@ -356,8 +348,7 @@
   font-size: 0.76rem;
   font-weight: 800;
 }
-.special-kata-options button.active,
-.dan-condition-row button.active {
+.special-kata-options button.active {
   border-color: var(--green);
   background: var(--green2);
   color: var(--green);
