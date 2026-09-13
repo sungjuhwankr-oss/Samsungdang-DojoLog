@@ -15,6 +15,9 @@ const serviceWorker = await readFile(new URL("../public/sw.js", import.meta.url)
 const backup = await readFile(new URL("../app/backup.ts", import.meta.url), "utf8");
 const backupFile = await readFile(new URL("../app/backup-file.ts", import.meta.url), "utf8");
 const nativeBridge = await readFile(new URL("../android/SaveActivity.java", import.meta.url), "utf8");
+const shareProvider = await readFile(new URL("../android/SamsungdangShareProvider.java", import.meta.url), "utf8");
+const androidManifest = await readFile(new URL("../android/AndroidManifest.xml", import.meta.url), "utf8");
+const sessionShare = await readFile(new URL("../app/session-share.ts", import.meta.url), "utf8");
 
 test("uses the v0.9.1 visible brand consistently", () => {
   assert.match(page, /삼성당 DojoLog — 지도자/);
@@ -138,6 +141,26 @@ test("runs native bridge WebView checks on the Android UI thread", () => {
   assert.match(savePath, /catch \(Exception error\) \{\s*emit\("save", "error"/);
   assert.match(openPath, /catch \(Exception error\) \{\s*emit\("open", "error"/);
   assert.match(nativeBridge, /addJavascriptInterface\(this, "SamsungdangBackupBridge"\);\s*\/\/[^\n]+\s*appWebView\.reload\(\);/);
+});
+
+test("shares a cache-only QR card through a read-only content URI", () => {
+  assert.match(page, /QR 포함 공유/);
+  assert.match(page, /createSessionSharePayload/);
+  assert.match(page, /createSessionShareCard/);
+  assert.match(sessionShare, /samsungdang-dojolog-session/);
+  assert.match(nativeBridge, /public void shareSession/);
+  assert.match(nativeBridge, /Intent\.ACTION_SEND/);
+  assert.match(nativeBridge, /Intent\.EXTRA_TEXT/);
+  assert.match(nativeBridge, /Intent\.EXTRA_STREAM/);
+  assert.match(nativeBridge, /FLAG_GRANT_READ_URI_PERMISSION/);
+  assert.match(nativeBridge, /getCacheDir\(\)/);
+  assert.doesNotMatch(nativeBridge, /Uri\.fromFile|file:\/\//);
+  assert.match(shareProvider, /extends ContentProvider/);
+  assert.match(shareProvider, /MODE_READ_ONLY/);
+  assert.match(androidManifest, /SamsungdangShareProvider/);
+  assert.match(androidManifest, /android:exported="false"/);
+  assert.match(androidManifest, /android:grantUriPermissions="true"/);
+  assert.doesNotMatch(androidManifest, /READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|MANAGE_EXTERNAL_STORAGE/);
 });
 
 test("preserves an unconfirmed class plan across video navigation", () => {

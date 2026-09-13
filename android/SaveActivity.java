@@ -1,18 +1,22 @@
 package com.nicron.webview;
 
 import android.app.Activity;
+import android.content.ClipData;
 import android.content.ContentResolver;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.OpenableColumns;
+import android.util.Base64;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Field;
@@ -23,6 +27,7 @@ public final class SaveActivity extends MainActivity {
     private static final int CREATE_BACKUP = 9901;
     private static final int OPEN_BACKUP = 9902;
     private static final int MAX_BACKUP_BYTES = 10 * 1024 * 1024;
+    private static final int MAX_SHARE_IMAGE_BYTES = 4 * 1024 * 1024;
     private WebView appWebView;
     private String pendingFilename;
     private String pendingContent;
@@ -111,6 +116,48 @@ public final class SaveActivity extends MainActivity {
         });
     }
 
+    @JavascriptInterface
+    public void shareSession(final String text, final String pngBase64, final String filename) {
+        if (text == null || pngBase64 == null || filename == null) return;
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                try {
+                    if (!isTrustedAppPage()) {
+                        emitShare("error");
+                        return;
+                    }
+                    byte[] png = Base64.decode(pngBase64, Base64.DEFAULT);
+                    if (png.length == 0 || png.length > MAX_SHARE_IMAGE_BYTES) throw new IllegalArgumentException("Share image too large");
+                    String safeName = filename.replaceAll("[^A-Za-z0-9._-]", "_");
+                    if (!safeName.endsWith(".png")) safeName += ".png";
+                    File directory = new File(getCacheDir(), SamsungdangShareProvider.CACHE_DIRECTORY);
+                    if (!directory.exists() && !directory.mkdirs()) throw new IllegalStateException("Cannot create share cache");
+                    File[] previous = directory.listFiles();
+                    if (previous != null) for (File file : previous) file.delete();
+                    File image = new File(directory, safeName);
+                    FileOutputStream stream = new FileOutputStream(image);
+                    try {
+                        stream.write(png);
+                        stream.flush();
+                    } finally {
+                        stream.close();
+                    }
+                    Uri uri = SamsungdangShareProvider.uriFor(safeName);
+                    Intent intent = new Intent(Intent.ACTION_SEND);
+                    intent.setType("image/png");
+                    intent.putExtra(Intent.EXTRA_TEXT, text);
+                    intent.putExtra(Intent.EXTRA_STREAM, uri);
+                    intent.setClipData(ClipData.newRawUri("수련기록 QR", uri));
+                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    startActivity(Intent.createChooser(intent, "수련기록 공유"));
+                    emitShare("success");
+                } catch (Exception error) {
+                    emitShare("error");
+                }
+            }
+        });
+    }
+
     private boolean isYouTubeHost(String host) {
         if (host == null) return false;
         String normalized = host.toLowerCase();
@@ -193,6 +240,13 @@ public final class SaveActivity extends MainActivity {
                 + (filename == null ? "" : ",filename:" + JSONObject.quote(filename))
                 + (content == null ? "" : ",content:" + JSONObject.quote(content))
                 + "}}))";
+        appWebView.evaluateJavascript(script, null);
+    }
+
+    private void emitShare(String status) {
+        if (appWebView == null) return;
+        String script = "window.dispatchEvent(new CustomEvent('samsungdang-share-result',{detail:{status:"
+                + JSONObject.quote(status) + "}}))";
         appWebView.evaluateJavascript(script, null);
     }
 }

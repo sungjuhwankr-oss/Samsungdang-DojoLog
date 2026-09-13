@@ -22,22 +22,22 @@ SHA-256 against the established release certificate before publishing.
    for `com.nicron.webview.MainActivity` may be used because the real class is
    already in the Nitron APK.
 3. Run D8 with `min-api 21`, treating the MainActivity stub as a library. Add
-   the resulting bridge DEX to the APK as `classes2.dex`; retain the Nitron
-   runtime `classes.dex` unchanged.
-4. In the base APK binary manifest, patch the exact existing values:
-   `versionCode 908` to `909`, `versionName 0.9.8` to `0.9.9`, and launcher
-   `com.nicron.webview.MainActivity` to
-   `com.nicron.webview.SaveActivity`. The activity names have equal encoded
-   length, so this release uses an exact in-place binary-string replacement.
+   the resulting bridge and share-provider DEX to the APK as `classes2.dex`;
+   retain the Nitron runtime `classes.dex` unchanged.
+4. For r8, compile `android/AndroidManifest.xml` and `android/res` with AAPT2.
+   Copy the launcher PNG resources from the compatible Nitron APK before
+   compiling. The source manifest keeps the established launcher and adds only
+   the read-only QR-card content provider. It also advances `versionCode` to
+   910 so r8 can update r7 while keeping `versionName` 0.9.9.
 5. Repackage without old `META-INF` signatures while preserving the base APK's
    ZIP methods. In particular, keep `resources.arsc` uncompressed (`stored`)
-   and 4-byte aligned; keep the binary `AndroidManifest.xml` stored as in the
-   base APK. Run zipalign before signing with the existing release key.
+   and 4-byte aligned; keep the binary `AndroidManifest.xml` stored. Run
+   zipalign before signing with the existing release key.
 6. Verify package/version/SDK/launcher metadata, v1/v2/v3 signatures,
    certificate identity, both DEX files, permissions, and exact
    `dist/client` to `assets/www` file/content equality. No `_next` files or
    storage permissions are expected.
 
-The binary-manifest patch is a release-specific compatibility step, not a new
-general Android build system. Recheck all source and target values before
-using the procedure for a later version.
+The earlier binary-manifest patch was a release-specific compatibility step.
+The checked-in r8 manifest is the reproducible source of the provider and
+version metadata; recheck all external inputs before using it later.

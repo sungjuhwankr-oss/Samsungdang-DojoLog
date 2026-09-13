@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="kr.or.aikido.samsungdang.dojolog.instructor"
+    android:versionCode="910"
+    android:versionName="0.9.9">
+    <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="34" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <application
+        android:hardwareAccelerated="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="삼성당 DojoLog — 지도자"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="false">
+        <activity
+            android:name="com.nicron.webview.SaveActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:exported="true"
+            android:screenOrientation="portrait">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data android:name="nitron.backButton" android:value="history" />
+            <meta-data android:name="nitron.clearCacheOnStart" android:value="true" />
+            <meta-data android:name="nitron.splashBackground" android:value="#ff175c45" />
+        </activity>
+        <provider
+            android:name="com.nicron.webview.SamsungdangShareProvider"
+            android:authorities="kr.or.aikido.samsungdang.dojolog.instructor.share"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+    </application>
+</manifest>
