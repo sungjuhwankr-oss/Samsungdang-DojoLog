@@ -67,7 +67,7 @@ printf 'Android platform: android-%s\n' "$PLATFORM_API"
 printf 'Build tools: %s\n' "$BUILD_TOOLS_VERSION"
 
 find "$SCRIPT_DIR/src" -name '*.java' -print0 | xargs -0 "$JAVA_BIN" \
-  -source 8 -target 8 -bootclasspath "$ANDROID_JAR" -d "$OUTPUT_DIR/classes"
+  -encoding UTF-8 -source 8 -target 8 -bootclasspath "$ANDROID_JAR" -d "$OUTPUT_DIR/classes"
 
 "$JAR_BIN" --create --file "$OUTPUT_DIR/classes.jar" -C "$OUTPUT_DIR/classes" .
 "$D8" --min-api 23 --lib "$ANDROID_JAR" --output "$OUTPUT_DIR/dex" "$OUTPUT_DIR/classes.jar"
