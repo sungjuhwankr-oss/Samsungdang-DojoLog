@@ -61,7 +61,7 @@ mkdir -p "$OUTPUT_DIR/classes" "$OUTPUT_DIR/dex"
 printf 'Java compiler: '; "$JAVA_BIN" -version 2>&1
 printf 'D8: '; "$D8" --version
 printf 'AAPT2: '; "$AAPT2" version
-printf 'zipalign: '; "$ZIPALIGN" -h 2>&1 | head -n 1
+printf 'zipalign: %s\n' "$ZIPALIGN"
 printf 'Android platform: android-%s\n' "$PLATFORM_API"
 printf 'Build tools: %s\n' "$BUILD_TOOLS_VERSION"
 
