@@ -140,7 +140,10 @@ test("runs native bridge WebView checks on the Android UI thread", () => {
   assert.ok(openPath.indexOf("runOnUiThread") < openPath.indexOf("isTrustedAppPage"));
   assert.match(savePath, /catch \(Exception error\) \{\s*emit\("save", "error"/);
   assert.match(openPath, /catch \(Exception error\) \{\s*emit\("open", "error"/);
-  assert.match(nativeBridge, /addJavascriptInterface\(this, "SamsungdangBackupBridge"\);\s*\/\/[^\n]+\s*appWebView\.reload\(\);/);
+  assert.match(nativeBridge, /addJavascriptInterface\(this, "SamsungdangBackupBridge"\);/);
+  assert.match(nativeBridge, /addJavascriptInterface\([\s\S]+"SamsungdangCredentialBridge"\);/);
+  assert.ok(nativeBridge.indexOf('addJavascriptInterface(this, "SamsungdangBackupBridge")') < nativeBridge.indexOf("appWebView.reload()"));
+  assert.ok(nativeBridge.indexOf('"SamsungdangCredentialBridge"') < nativeBridge.indexOf("appWebView.reload()"));
 });
 
 test("shares a cache-only QR card through a read-only content URI", () => {

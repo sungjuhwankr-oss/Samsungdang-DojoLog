@@ -41,3 +41,18 @@ SHA-256 against the established release certificate before publishing.
 The earlier binary-manifest patch was a release-specific compatibility step.
 The checked-in r8 manifest is the reproducible source of the provider and
 version metadata; recheck all external inputs before using it later.
+
+## Phase 4H-A development update build
+
+`build-update.sh` provides the checked-in packaging path used for the 4H-A
+device build. It takes the trusted r8 APK as its Nitron runtime/resource base,
+compiles every checked-in `android/*.java` source, replaces `classes2.dex` and
+the exact `dist/client` tree, and signs with the existing release key supplied
+outside Git. It verifies the release certificate, preserves the base binary
+manifest byte-for-byte, and compares the packaged web assets with `dist/client`.
+
+The script never creates or replaces an APK signing key. Passwords are accepted
+only through `SAMSUNGDANG_STOREPASS` and `SAMSUNGDANG_KEYPASS`; they must not be
+placed in source, logs, or command-line arguments. Because the exact r8 binary
+manifest is preserved, this Phase 4H-A APK remains versionCode 910 and is a
+development update candidate, not a new stable release.

@@ -40,6 +40,9 @@ public final class SaveActivity extends MainActivity {
             field.setAccessible(true);
             appWebView = (WebView) field.get(this);
             appWebView.addJavascriptInterface(this, "SamsungdangBackupBridge");
+            appWebView.addJavascriptInterface(
+                    new CredentialIssuerBridge(this, appWebView),
+                    "SamsungdangCredentialBridge");
             // Injected interfaces become visible to JavaScript on the next page load.
             appWebView.reload();
         } catch (Exception error) {
