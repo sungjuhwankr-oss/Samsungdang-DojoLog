@@ -45,11 +45,12 @@ fi
 BUILD_TOOLS="$SDK_ROOT/build-tools/$BUILD_TOOLS_VERSION"
 ANDROID_JAR="$SDK_ROOT/platforms/android-$PLATFORM_API/android.jar"
 JAVA_BIN="${JAVA_HOME:+$JAVA_HOME/bin/}javac"
+JAR_BIN="${JAVA_HOME:+$JAVA_HOME/bin/}jar"
 D8="$BUILD_TOOLS/d8"
 AAPT2="$BUILD_TOOLS/aapt2"
 ZIPALIGN="$BUILD_TOOLS/zipalign"
 
-for tool in "$JAVA_BIN" "$D8" "$AAPT2" "$ZIPALIGN" "$ANDROID_JAR"; do
+for tool in "$JAVA_BIN" "$JAR_BIN" "$D8" "$AAPT2" "$ZIPALIGN" "$ANDROID_JAR"; do
   if [ ! -e "$tool" ] && ! command -v "$tool" >/dev/null 2>&1; then
     printf 'Required tool or platform file not found: %s\n' "$tool" >&2
     exit 2
@@ -68,7 +69,8 @@ printf 'Build tools: %s\n' "$BUILD_TOOLS_VERSION"
 find "$SCRIPT_DIR/src" -name '*.java' -print0 | xargs -0 "$JAVA_BIN" \
   -source 8 -target 8 -bootclasspath "$ANDROID_JAR" -d "$OUTPUT_DIR/classes"
 
-"$D8" --min-api 23 --lib "$ANDROID_JAR" --output "$OUTPUT_DIR/dex" "$OUTPUT_DIR/classes"
+"$JAR_BIN" --create --file "$OUTPUT_DIR/classes.jar" -C "$OUTPUT_DIR/classes" .
+"$D8" --min-api 23 --lib "$ANDROID_JAR" --output "$OUTPUT_DIR/dex" "$OUTPUT_DIR/classes.jar"
 "$AAPT2" link --manifest "$SCRIPT_DIR/AndroidManifest.xml" -I "$ANDROID_JAR" \
   --min-sdk-version 23 --target-sdk-version 35 -o "$OUTPUT_DIR/unsigned-unaligned.apk"
 
