@@ -2,6 +2,7 @@ export const CREDENTIAL_SCHEMA = "samsungdang-dojolog-credential";
 export const CREDENTIAL_VERSION = 1;
 export const CREDENTIAL_ISSUER = "aikido-samsungdang";
 export const MEMBERSHIP_TYPE = "membership";
+export const PROMOTION_TYPE = "promotion";
 export const TRUSTED_KEY_BOOTSTRAP_SCHEMA = "samsungdang-dojolog-trusted-key-bootstrap";
 
 export type MembershipInput = {
@@ -25,6 +26,50 @@ export type MembershipCredential = {
   signed: MembershipSigned;
   signature: string;
 };
+
+export type Rank = {
+  rankType: "kyu" | "dan";
+  rankValue: number;
+};
+
+export type PromotionPayload =
+  | {
+    eventType: "promoted";
+    examDate: string;
+    mode: "advance-one";
+  }
+  | {
+    eventType: "promoted";
+    examDate: string;
+    mode: "target";
+    targetRank: Rank;
+  }
+  | {
+    eventType: "recognized-at-entry";
+    memberId: string;
+    mode: "target";
+    rankDate: string | null;
+    recognizedAt: string;
+    targetRank: Rank;
+  };
+
+export type PromotionSigned = {
+  schema: typeof CREDENTIAL_SCHEMA;
+  credentialVersion: typeof CREDENTIAL_VERSION;
+  issuer: typeof CREDENTIAL_ISSUER;
+  type: typeof PROMOTION_TYPE;
+  credentialId: string;
+  keyId: string;
+  issuedAt: string;
+  payload: PromotionPayload;
+};
+
+export type PromotionCredential = {
+  signed: PromotionSigned;
+  signature: string;
+};
+
+export type CredentialV1 = MembershipCredential | PromotionCredential;
 
 export type TrustedKeyBootstrap = {
   schema: typeof TRUSTED_KEY_BOOTSTRAP_SCHEMA;
@@ -90,6 +135,76 @@ export function membershipInputErrors(input: MembershipInput): string[] {
   return errors;
 }
 
+function validateRank(value: unknown): asserts value is Rank {
+  if (!plainObject(value) || !exactKeys(value, ["rankType", "rankValue"])) {
+    throw new Error("invalid targetRank fields");
+  }
+  if (value.rankType !== "kyu" && value.rankType !== "dan") {
+    throw new Error("invalid rankType");
+  }
+  if (typeof value.rankValue !== "number" || !Number.isSafeInteger(value.rankValue)) {
+    throw new Error("rankValue must be a safe integer");
+  }
+  if (value.rankType === "kyu" && (value.rankValue < 1 || value.rankValue > 9)) {
+    throw new Error("kyu rankValue must be an integer from 1 through 9");
+  }
+  if (value.rankType === "dan" && value.rankValue <= 0) {
+    throw new Error("dan rankValue must be a positive safe integer");
+  }
+}
+
+export function validatePromotionPayload(value: unknown): asserts value is PromotionPayload {
+  if (!plainObject(value)) throw new Error("promotion payload must be an object");
+  if (value.eventType === "promoted" && value.mode === "advance-one") {
+    if (!exactKeys(value, ["eventType", "examDate", "mode"])) {
+      throw new Error("invalid advance-one payload fields");
+    }
+    if (typeof value.examDate !== "string" || !isCalendarDate(value.examDate)) {
+      throw new Error("examDate must be a real YYYY-MM-DD date");
+    }
+    return;
+  }
+  if (value.eventType === "promoted" && value.mode === "target") {
+    if (!exactKeys(value, ["eventType", "examDate", "mode", "targetRank"])) {
+      throw new Error("invalid target promotion payload fields");
+    }
+    if (typeof value.examDate !== "string" || !isCalendarDate(value.examDate)) {
+      throw new Error("examDate must be a real YYYY-MM-DD date");
+    }
+    validateRank(value.targetRank);
+    return;
+  }
+  if (value.eventType === "recognized-at-entry" && value.mode === "target") {
+    if (!exactKeys(value, ["eventType", "memberId", "mode", "rankDate", "recognizedAt", "targetRank"])) {
+      throw new Error("invalid recognized-at-entry payload fields");
+    }
+    if (typeof value.memberId !== "string" || !MEMBER_ID.test(value.memberId)) {
+      throw new Error("memberId must match ASD-000");
+    }
+    if (value.rankDate !== null && (typeof value.rankDate !== "string" || !isCalendarDate(value.rankDate))) {
+      throw new Error("rankDate must be null or a real YYYY-MM-DD date");
+    }
+    if (typeof value.recognizedAt !== "string" || !isCalendarDate(value.recognizedAt)) {
+      throw new Error("recognizedAt must be a real YYYY-MM-DD date");
+    }
+    if (value.rankDate !== null && value.rankDate > value.recognizedAt) {
+      throw new Error("rankDate must not be after recognizedAt");
+    }
+    validateRank(value.targetRank);
+    return;
+  }
+  throw new Error("invalid promotion eventType/mode combination");
+}
+
+export function promotionInputErrors(input: unknown): string[] {
+  try {
+    validatePromotionPayload(input);
+    return [];
+  } catch (error) {
+    return [error instanceof Error ? error.message : "invalid promotion payload"];
+  }
+}
+
 function validUtcSecond(value: string): boolean {
   if (!ISSUED_AT.test(value)) return false;
   const date = value.slice(0, 10);
@@ -119,6 +234,24 @@ export function validateMembershipSigned(value: unknown): asserts value is Membe
   if (errors.length) throw new Error(errors.join(" "));
 }
 
+function validateCommonSigned(value: unknown, type: string): asserts value is Record<string, unknown> {
+  if (!plainObject(value) || !exactKeys(value, [
+    "schema", "credentialVersion", "issuer", "type", "credentialId", "keyId", "issuedAt", "payload"
+  ])) throw new Error("signed object fields are invalid");
+  if (value.schema !== CREDENTIAL_SCHEMA) throw new Error("unsupported credential schema");
+  if (value.credentialVersion !== CREDENTIAL_VERSION) throw new Error("unsupported credential version");
+  if (value.issuer !== CREDENTIAL_ISSUER) throw new Error("unsupported credential issuer");
+  if (value.type !== type) throw new Error("unsupported credential type");
+  if (typeof value.credentialId !== "string" || !CREDENTIAL_ID.test(value.credentialId)) throw new Error("invalid credentialId");
+  if (typeof value.keyId !== "string" || !KEY_ID.test(value.keyId)) throw new Error("invalid keyId");
+  if (typeof value.issuedAt !== "string" || !validUtcSecond(value.issuedAt)) throw new Error("invalid issuedAt");
+}
+
+export function validatePromotionSigned(value: unknown): asserts value is PromotionSigned {
+  validateCommonSigned(value, PROMOTION_TYPE);
+  validatePromotionPayload(value.payload);
+}
+
 export function parseMembershipCredential(json: string): MembershipCredential {
   const value: unknown = JSON.parse(json);
   if (!plainObject(value) || !exactKeys(value, ["signed", "signature"])) throw new Error("credential envelope fields are invalid");
@@ -126,6 +259,15 @@ export function parseMembershipCredential(json: string): MembershipCredential {
   if (typeof value.signature !== "string") throw new Error("credential signature is invalid");
   decodeCanonicalBase64Url(value.signature, 64);
   return value as MembershipCredential;
+}
+
+export function parsePromotionCredential(json: string): PromotionCredential {
+  const value: unknown = JSON.parse(json);
+  if (!plainObject(value) || !exactKeys(value, ["signed", "signature"])) throw new Error("credential envelope fields are invalid");
+  validatePromotionSigned(value.signed);
+  if (typeof value.signature !== "string") throw new Error("credential signature is invalid");
+  decodeCanonicalBase64Url(value.signature, 64);
+  return value as PromotionCredential;
 }
 
 export function parseTrustedKeyBootstrap(json: string): TrustedKeyBootstrap {
@@ -165,6 +307,34 @@ export function canonicalizeMembershipSigned(value: unknown): string {
     + `,\"type\":${JSON.stringify(value.type)}}`;
 }
 
+function canonicalizeRank(rank: Rank): string {
+  return `{"rankType":${JSON.stringify(rank.rankType)},"rankValue":${JSON.stringify(rank.rankValue)}}`;
+}
+
+export function canonicalizePromotionSigned(value: unknown): string {
+  validatePromotionSigned(value);
+  let payload: string;
+  if (value.payload.eventType === "promoted" && value.payload.mode === "advance-one") {
+    payload = `{"eventType":"promoted","examDate":${JSON.stringify(value.payload.examDate)},"mode":"advance-one"}`;
+  } else if (value.payload.eventType === "promoted") {
+    payload = `{"eventType":"promoted","examDate":${JSON.stringify(value.payload.examDate)}`
+      + `,"mode":"target","targetRank":${canonicalizeRank(value.payload.targetRank)}}`;
+  } else {
+    payload = `{"eventType":"recognized-at-entry","memberId":${JSON.stringify(value.payload.memberId)}`
+      + `,"mode":"target","rankDate":${value.payload.rankDate === null ? "null" : JSON.stringify(value.payload.rankDate)}`
+      + `,"recognizedAt":${JSON.stringify(value.payload.recognizedAt)}`
+      + `,"targetRank":${canonicalizeRank(value.payload.targetRank)}}`;
+  }
+  return `{"credentialId":${JSON.stringify(value.credentialId)}`
+    + `,"credentialVersion":1`
+    + `,"issuedAt":${JSON.stringify(value.issuedAt)}`
+    + `,"issuer":${JSON.stringify(value.issuer)}`
+    + `,"keyId":${JSON.stringify(value.keyId)}`
+    + `,"payload":${payload}`
+    + `,"schema":${JSON.stringify(value.schema)}`
+    + `,"type":${JSON.stringify(value.type)}}`;
+}
+
 export function encodeUnpaddedBase64Url(bytes: Uint8Array): string {
   let binary = "";
   for (let index = 0; index < bytes.length; index += 0x8000) {
@@ -201,13 +371,13 @@ export async function calculateKeyId(spkiDer: Uint8Array): Promise<string> {
   return `k1_${encodeUnpaddedBase64Url(new Uint8Array(digest))}`;
 }
 
-export function createCredentialTransportToken(credential: MembershipCredential): string {
+export function createCredentialTransportToken(credential: CredentialV1): string {
   const compactJson = JSON.stringify(credential);
   return encodeUnpaddedBase64Url(new TextEncoder().encode(compactJson));
 }
 
 export function createCredentialDeepLink(
-  credential: MembershipCredential,
+  credential: CredentialV1,
   target: { baseUrl: string; route: string; parameterName: string }
 ): string {
   const base = new URL(target.route, target.baseUrl);
@@ -221,6 +391,21 @@ export async function verifyMembershipCredential(
   credential: MembershipCredential,
   bootstrap: TrustedKeyBootstrap
 ): Promise<boolean> {
+  return verifyCredential(credential, bootstrap, canonicalizeMembershipSigned);
+}
+
+export async function verifyPromotionCredential(
+  credential: PromotionCredential,
+  bootstrap: TrustedKeyBootstrap
+): Promise<boolean> {
+  return verifyCredential(credential, bootstrap, canonicalizePromotionSigned);
+}
+
+async function verifyCredential(
+  credential: CredentialV1,
+  bootstrap: TrustedKeyBootstrap,
+  canonicalize: (value: unknown) => string
+): Promise<boolean> {
   if (credential.signed.keyId !== bootstrap.keyId) return false;
   const spki = decodeCanonicalBase64Url(bootstrap.publicKeySpkiBase64Url, bootstrap.publicKeyByteLength);
   if (await calculateKeyId(spki) !== bootstrap.keyId) return false;
@@ -232,7 +417,7 @@ export async function verifyMembershipCredential(
     ["verify"]
   );
   const signature = decodeCanonicalBase64Url(credential.signature, 64);
-  const signedBytes = new TextEncoder().encode(canonicalizeMembershipSigned(credential.signed));
+  const signedBytes = new TextEncoder().encode(canonicalize(credential.signed));
   return crypto.subtle.verify(
     { name: "ECDSA", hash: "SHA-256" },
     publicKey,

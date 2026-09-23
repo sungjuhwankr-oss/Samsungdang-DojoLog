@@ -22,7 +22,10 @@ import java.security.spec.ECGenParameterSpec;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Locale;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -62,52 +65,72 @@ public final class CredentialIssuerBridge {
         run("issue-membership", new Operation() {
             @Override public Result execute() throws Exception {
                 CredentialV1.validateMembership(name, memberId, joinedAt);
-                KeyMaterial material = loadOrCreateActiveKey();
-                byte[] randomBytes = new byte[16];
-                RANDOM.nextBytes(randomBytes);
-                String credentialId = CredentialV1.credentialId(randomBytes);
-                Arrays.fill(randomBytes, (byte) 0);
-                String issuedAt = utcNow();
-                String signed = CredentialV1.canonicalMembershipSigned(
-                        credentialId,
-                        material.keyId,
-                        issuedAt,
-                        name,
-                        memberId,
-                        joinedAt);
-                byte[] signingBytes = signed.getBytes(StandardCharsets.UTF_8);
-                Signature signer = Signature.getInstance(SIGNATURE_ALGORITHM);
-                signer.initSign(material.privateKey);
-                signer.update(signingBytes);
-                byte[] derSignature = signer.sign();
-
-                Signature verifier = Signature.getInstance(SIGNATURE_ALGORITHM);
-                verifier.initVerify(material.publicKey);
-                verifier.update(signingBytes);
-                if (!verifier.verify(derSignature)) {
-                    throw new SecurityException("Android signature self-verification failed");
-                }
-
-                byte[] rawSignature = StrictEcdsaDer.toP256Raw(derSignature);
-                if (rawSignature.length != 64) {
-                    throw new SecurityException("Credential signature is not 64 bytes");
-                }
-                String signature = CredentialV1.base64Url(rawSignature);
-                String credential = CredentialV1.envelope(signed, signature);
-                String token = CredentialV1.transportToken(credential);
-                String diagnostics = "{"
-                        + "\"signatureAlgorithm\":\"SHA256withECDSA\""
-                        + ",\"derSignatureByteLength\":" + derSignature.length
-                        + ",\"wireSignatureByteLength\":64"
-                        + ",\"jcsUtf8ByteLength\":" + signingBytes.length
-                        + ",\"signatureSelfVerificationPassed\":true"
-                        + ",\"privateKeyEncodedIsNull\":true"
-                        + "}";
-                Arrays.fill(derSignature, (byte) 0);
-                Arrays.fill(rawSignature, (byte) 0);
-                return new Result(credential, material.bootstrapJson(), token, diagnostics);
+                return signCredential("membership", new SignedFactory() {
+                    @Override public String create(
+                            String credentialId, String keyId, String issuedAt) {
+                        return CredentialV1.canonicalMembershipSigned(
+                                credentialId, keyId, issuedAt, name, memberId, joinedAt);
+                    }
+                });
             }
         });
+    }
+
+    @JavascriptInterface
+    public void issuePromotionCredential(final String payloadJson) {
+        run("issue-promotion", new Operation() {
+            @Override public Result execute() throws Exception {
+                final PromotionRequest request = PromotionRequest.parse(payloadJson);
+                return signCredential("promotion", new SignedFactory() {
+                    @Override public String create(
+                            String credentialId, String keyId, String issuedAt) {
+                        return request.canonicalSigned(credentialId, keyId, issuedAt);
+                    }
+                });
+            }
+        });
+    }
+
+    private Result signCredential(String credentialType, SignedFactory factory) throws Exception {
+        KeyMaterial material = loadOrCreateActiveKey();
+        byte[] randomBytes = new byte[16];
+        RANDOM.nextBytes(randomBytes);
+        String credentialId = CredentialV1.credentialId(randomBytes);
+        Arrays.fill(randomBytes, (byte) 0);
+        String issuedAt = utcNow();
+        String signed = factory.create(credentialId, material.keyId, issuedAt);
+        byte[] signingBytes = signed.getBytes(StandardCharsets.UTF_8);
+        Signature signer = Signature.getInstance(SIGNATURE_ALGORITHM);
+        signer.initSign(material.privateKey);
+        signer.update(signingBytes);
+        byte[] derSignature = signer.sign();
+
+        Signature verifier = Signature.getInstance(SIGNATURE_ALGORITHM);
+        verifier.initVerify(material.publicKey);
+        verifier.update(signingBytes);
+        if (!verifier.verify(derSignature)) {
+            throw new SecurityException("Android signature self-verification failed");
+        }
+
+        byte[] rawSignature = StrictEcdsaDer.toP256Raw(derSignature);
+        if (rawSignature.length != 64) {
+            throw new SecurityException("Credential signature is not 64 bytes");
+        }
+        String signature = CredentialV1.base64Url(rawSignature);
+        String credential = CredentialV1.envelope(signed, signature);
+        String token = CredentialV1.transportToken(credential);
+        String diagnostics = "{"
+                + "\"credentialType\":" + JSONObject.quote(credentialType)
+                + ",\"signatureAlgorithm\":\"SHA256withECDSA\""
+                + ",\"derSignatureByteLength\":" + derSignature.length
+                + ",\"wireSignatureByteLength\":64"
+                + ",\"jcsUtf8ByteLength\":" + signingBytes.length
+                + ",\"signatureSelfVerificationPassed\":true"
+                + ",\"privateKeyEncodedIsNull\":true"
+                + "}";
+        Arrays.fill(derSignature, (byte) 0);
+        Arrays.fill(rawSignature, (byte) 0);
+        return new Result(credential, material.bootstrapJson(), token, diagnostics);
     }
 
     private void run(final String operation, final Operation task) {
@@ -236,6 +259,10 @@ public final class CredentialIssuerBridge {
         Result execute() throws Exception;
     }
 
+    private interface SignedFactory {
+        String create(String credentialId, String keyId, String issuedAt);
+    }
+
     private static final class Result {
         final String json;
         final String bootstrap;
@@ -269,6 +296,141 @@ public final class CredentialIssuerBridge {
 
         String bootstrapJson() {
             return bootstrap;
+        }
+    }
+
+    private static final class PromotionRequest {
+        final String eventType;
+        final String mode;
+        final String examDate;
+        final String memberId;
+        final String rankDate;
+        final String recognizedAt;
+        final String rankType;
+        final long rankValue;
+
+        PromotionRequest(
+                String eventType,
+                String mode,
+                String examDate,
+                String memberId,
+                String rankDate,
+                String recognizedAt,
+                String rankType,
+                long rankValue) {
+            this.eventType = eventType;
+            this.mode = mode;
+            this.examDate = examDate;
+            this.memberId = memberId;
+            this.rankDate = rankDate;
+            this.recognizedAt = recognizedAt;
+            this.rankType = rankType;
+            this.rankValue = rankValue;
+        }
+
+        static PromotionRequest parse(String json) throws Exception {
+            if (json == null || json.length() == 0) {
+                throw new IllegalArgumentException("promotion payload is required");
+            }
+            JSONObject payload = new JSONObject(json);
+            String eventType = requireString(payload, "eventType");
+            String mode = requireString(payload, "mode");
+            if ("promoted".equals(eventType) && "advance-one".equals(mode)) {
+                requireExactKeys(payload, "eventType", "examDate", "mode");
+                String examDate = requireString(payload, "examDate");
+                CredentialV1.validatePromotionAdvanceOne(examDate);
+                return new PromotionRequest(eventType, mode, examDate,
+                        null, null, null, null, 0);
+            }
+            if ("promoted".equals(eventType) && "target".equals(mode)) {
+                requireExactKeys(payload, "eventType", "examDate", "mode", "targetRank");
+                String examDate = requireString(payload, "examDate");
+                Rank rank = parseRank(requireObject(payload, "targetRank"));
+                CredentialV1.validatePromotionTarget(examDate, rank.type, rank.value);
+                return new PromotionRequest(eventType, mode, examDate,
+                        null, null, null, rank.type, rank.value);
+            }
+            if ("recognized-at-entry".equals(eventType) && "target".equals(mode)) {
+                requireExactKeys(payload, "eventType", "memberId", "mode", "rankDate",
+                        "recognizedAt", "targetRank");
+                String memberId = requireString(payload, "memberId");
+                Object rankDateValue = payload.get("rankDate");
+                String rankDate;
+                if (rankDateValue == JSONObject.NULL) {
+                    rankDate = null;
+                } else if (rankDateValue instanceof String) {
+                    rankDate = (String) rankDateValue;
+                } else {
+                    throw new IllegalArgumentException("rankDate must be a string or null");
+                }
+                String recognizedAt = requireString(payload, "recognizedAt");
+                Rank rank = parseRank(requireObject(payload, "targetRank"));
+                CredentialV1.validatePromotionRecognizedAtEntry(
+                        memberId, rankDate, recognizedAt, rank.type, rank.value);
+                return new PromotionRequest(eventType, mode, null,
+                        memberId, rankDate, recognizedAt, rank.type, rank.value);
+            }
+            throw new IllegalArgumentException("invalid promotion eventType/mode combination");
+        }
+
+        String canonicalSigned(String credentialId, String keyId, String issuedAt) {
+            if ("promoted".equals(eventType) && "advance-one".equals(mode)) {
+                return CredentialV1.canonicalPromotionAdvanceOneSigned(
+                        credentialId, keyId, issuedAt, examDate);
+            }
+            if ("promoted".equals(eventType)) {
+                return CredentialV1.canonicalPromotionTargetSigned(
+                        credentialId, keyId, issuedAt, examDate, rankType, rankValue);
+            }
+            return CredentialV1.canonicalPromotionRecognizedAtEntrySigned(
+                    credentialId, keyId, issuedAt, memberId, rankDate,
+                    recognizedAt, rankType, rankValue);
+        }
+
+        private static Rank parseRank(JSONObject rank) throws Exception {
+            requireExactKeys(rank, "rankType", "rankValue");
+            String type = requireString(rank, "rankType");
+            Object value = rank.get("rankValue");
+            if (!(value instanceof Integer) && !(value instanceof Long)) {
+                throw new IllegalArgumentException("rankValue must be an integer");
+            }
+            return new Rank(type, ((Number) value).longValue());
+        }
+
+        private static JSONObject requireObject(JSONObject object, String key) throws Exception {
+            Object value = object.get(key);
+            if (!(value instanceof JSONObject)) {
+                throw new IllegalArgumentException(key + " must be an object");
+            }
+            return (JSONObject) value;
+        }
+
+        private static String requireString(JSONObject object, String key) throws Exception {
+            Object value = object.get(key);
+            if (!(value instanceof String)) {
+                throw new IllegalArgumentException(key + " must be a string");
+            }
+            return (String) value;
+        }
+
+        private static void requireExactKeys(JSONObject object, String... expected) {
+            Set<String> keys = new HashSet<String>();
+            Iterator<String> iterator = object.keys();
+            while (iterator.hasNext()) keys.add(iterator.next());
+            Set<String> expectedKeys = new HashSet<String>(Arrays.asList(expected));
+            if (!keys.equals(expectedKeys)) {
+                throw new IllegalArgumentException("promotion payload fields are invalid");
+            }
+        }
+
+        private static final class Rank {
+            final String type;
+            final long value;
+
+            Rank(String type, long value) {
+                this.type = type;
+                this.value = value;
+            }
         }
     }
 }

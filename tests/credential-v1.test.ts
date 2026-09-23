@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
   calculateKeyId,
   canonicalizeMembershipSigned,
+  canonicalizePromotionSigned,
   createCredentialDeepLink,
   createCredentialId,
   createCredentialTransportToken,
@@ -12,7 +14,13 @@ import {
   encodeUnpaddedBase64Url,
   membershipInputErrors,
   parseMembershipCredential,
-  parseTrustedKeyBootstrap
+  parsePromotionCredential,
+  parseTrustedKeyBootstrap,
+  promotionInputErrors,
+  verifyMembershipCredential,
+  verifyPromotionCredential,
+  type PromotionCredential,
+  type TrustedKeyBootstrap
 } from "../app/credential-v1";
 
 const signature = encodeUnpaddedBase64Url(Uint8Array.from({ length: 64 }, (_, index) => index));
@@ -26,6 +34,16 @@ const signed = {
   credentialId: "c1_AAECAwQFBgcICQoLDA0ODw",
   credentialVersion: 1
 };
+
+const promotionCommon = {
+  schema: "samsungdang-dojolog-credential",
+  credentialVersion: 1,
+  issuer: "aikido-samsungdang",
+  type: "promotion",
+  credentialId: "c1_AAECAwQFBgcICQoLDA0ODw",
+  keyId: "k1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  issuedAt: "2026-09-26T11:30:00Z"
+} as const;
 
 test("Membership signed object uses deterministic credential-specific RFC 8785 JCS", () => {
   const first = canonicalizeMembershipSigned(signed);
@@ -41,6 +59,125 @@ test("Membership signed object uses deterministic credential-specific RFC 8785 J
   });
   assert.equal(first, second);
   assert.match(first, /"payload":\{"joinedAt":"2026-09-21","memberId":"ASD-000","name":"테스트회원"\}/);
+});
+
+test("actual Phase 4H Membership fixture and canonical signed bytes remain byte-for-byte unchanged", async () => {
+  const fixtureBytes = await readFile(new URL("./fixtures/membership-test-credential-v1.json", import.meta.url));
+  assert.equal(createHash("sha256").update(fixtureBytes).digest("hex"), "376ea76504eca6050bf48e058c7cd14a392703db46a161ee7b698671c61ffef9");
+  const credential = parseMembershipCredential(fixtureBytes.toString("utf8"));
+  assert.equal(
+    canonicalizeMembershipSigned(credential.signed),
+    "{\"credentialId\":\"c1_MOccbBVzlZ1WfD2hM-gVIQ\",\"credentialVersion\":1,\"issuedAt\":\"2026-09-21T09:49:00Z\",\"issuer\":\"aikido-samsungdang\",\"keyId\":\"k1_wVLoeV9NYjTi8BqZ-Ktx4-Z7jC1raOTURWSFeum-zfU\",\"payload\":{\"joinedAt\":\"2026-09-21\",\"memberId\":\"ASD-000\",\"name\":\"테스트회원 (실제 회원 아님)\"},\"schema\":\"samsungdang-dojolog-credential\",\"type\":\"membership\"}"
+  );
+  const bootstrap = parseTrustedKeyBootstrap(JSON.stringify({
+    schema: "samsungdang-dojolog-trusted-key-bootstrap",
+    schemaVersion: 1,
+    purpose: "credential-v1-initial-trust-provisioning",
+    keyId: credential.signed.keyId,
+    algorithm: "ECDSA-SHA-256",
+    curve: "P-256",
+    publicKeyFormat: "X.509 SubjectPublicKeyInfo DER",
+    publicKeySpkiBase64Url: "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIuIqBKZFL7wfRDDys_gvG6xg0kT8bbeF70Pm-qta2CTcAiC6f1FlQo2rhmHCjO3R_KzswZS-DjAvtgqy5kHXhg",
+    publicKeyByteLength: 91,
+    trustStatus: "pending-member-pwa-distribution",
+    intendedRegistryStatus: "active",
+    generatedOrReused: "reused",
+    androidKeyStoreUsed: true,
+    privateKeyEncodedIsNull: true
+  }));
+  assert.equal(await verifyMembershipCredential(credential, bootstrap), true);
+});
+
+test("Promotion payload variants use exact RFC 8785 field order and exact fields", () => {
+  const advance = { ...promotionCommon, payload: { eventType: "promoted", examDate: "2026-09-26", mode: "advance-one" } };
+  const targetKyu = { ...promotionCommon, payload: { eventType: "promoted", examDate: "2026-09-26", mode: "target", targetRank: { rankType: "kyu", rankValue: 5 } } };
+  const targetDan = { ...promotionCommon, payload: { eventType: "promoted", examDate: "2026-09-26", mode: "target", targetRank: { rankType: "dan", rankValue: 1 } } };
+  const recognized = { ...promotionCommon, payload: { eventType: "recognized-at-entry", memberId: "ASD-000", mode: "target", rankDate: null, recognizedAt: "2026-09-26", targetRank: { rankType: "kyu", rankValue: 5 } } };
+
+  assert.match(canonicalizePromotionSigned(advance), /"payload":\{"eventType":"promoted","examDate":"2026-09-26","mode":"advance-one"\}/);
+  assert.match(canonicalizePromotionSigned(targetKyu), /"targetRank":\{"rankType":"kyu","rankValue":5\}/);
+  assert.match(canonicalizePromotionSigned(targetDan), /"targetRank":\{"rankType":"dan","rankValue":1\}/);
+  assert.match(canonicalizePromotionSigned(recognized), /"payload":\{"eventType":"recognized-at-entry","memberId":"ASD-000","mode":"target","rankDate":null,"recognizedAt":"2026-09-26","targetRank":\{"rankType":"kyu","rankValue":5\}\}/);
+  assert.doesNotMatch(canonicalizePromotionSigned(advance), /memberId|currentRank|sourceRank|targetRank/);
+});
+
+test("Promotion validation rejects malformed dates, combinations, ranks, missing and extra fields", () => {
+  const invalid = [
+    { eventType: "promoted", examDate: "2026-02-30", mode: "advance-one" },
+    { eventType: "promoted", examDate: "2026-09-26", mode: "unknown" },
+    { eventType: "recognized-at-entry", examDate: "2026-09-26", mode: "advance-one" },
+    { eventType: "promoted", examDate: "2026-09-26", mode: "advance-one", targetRank: { rankType: "kyu", rankValue: 5 } },
+    { eventType: "promoted", examDate: "2026-09-26", mode: "target" },
+    { eventType: "promoted", examDate: "2026-09-26", mode: "target", targetRank: { rankType: "kyu", rankValue: 0 } },
+    { eventType: "promoted", examDate: "2026-09-26", mode: "target", targetRank: { rankType: "kyu", rankValue: 10 } },
+    { eventType: "promoted", examDate: "2026-09-26", mode: "target", targetRank: { rankType: "dan", rankValue: 0 } },
+    { eventType: "promoted", examDate: "2026-09-26", mode: "target", targetRank: { rankType: "dan", rankValue: Number.MAX_SAFE_INTEGER + 1 } },
+    { eventType: "promoted", examDate: "2026-09-26", mode: "target", targetRank: { rankType: "sho", rankValue: 1 } },
+    { eventType: "recognized-at-entry", memberId: "", mode: "target", rankDate: null, recognizedAt: "2026-09-26", targetRank: { rankType: "kyu", rankValue: 5 } },
+    { eventType: "recognized-at-entry", memberId: "ASD-000", mode: "target", rankDate: "2026-09-27", recognizedAt: "2026-09-26", targetRank: { rankType: "kyu", rankValue: 5 } },
+    { eventType: "recognized-at-entry", memberId: "ASD-000", mode: "target", rankDate: "bad", recognizedAt: "2026-09-26", targetRank: { rankType: "kyu", rankValue: 5 } },
+    { eventType: "recognized-at-entry", memberId: "ASD-000", mode: "target", rankDate: null, recognizedAt: "2026-02-30", targetRank: { rankType: "kyu", rankValue: 5 }, extra: true }
+  ];
+  for (const payload of invalid) assert.ok(promotionInputErrors(payload).length > 0, JSON.stringify(payload));
+  assert.deepEqual(promotionInputErrors({
+    eventType: "recognized-at-entry",
+    memberId: "ASD-000",
+    mode: "target",
+    rankDate: "2026-09-25",
+    recognizedAt: "2026-09-26",
+    targetRank: { rankType: "dan", rankValue: 1 }
+  }), []);
+});
+
+test("Promotion credential signs, verifies, round trips, and rejects signed-field and signature tamper", async () => {
+  const keyPair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+  const spki = new Uint8Array(await crypto.subtle.exportKey("spki", keyPair.publicKey));
+  const keyId = await calculateKeyId(spki);
+  const bootstrap = parseTrustedKeyBootstrap(JSON.stringify({
+    schema: "samsungdang-dojolog-trusted-key-bootstrap",
+    schemaVersion: 1,
+    purpose: "credential-v1-initial-trust-provisioning",
+    keyId,
+    algorithm: "ECDSA-SHA-256",
+    curve: "P-256",
+    publicKeyFormat: "X.509 SubjectPublicKeyInfo DER",
+    publicKeySpkiBase64Url: encodeUnpaddedBase64Url(spki),
+    publicKeyByteLength: spki.length,
+    trustStatus: "pending-member-pwa-distribution",
+    intendedRegistryStatus: "active",
+    generatedOrReused: "reused",
+    androidKeyStoreUsed: true,
+    privateKeyEncodedIsNull: true
+  })) as TrustedKeyBootstrap;
+  const payloads = [
+    { eventType: "promoted", examDate: "2026-09-26", mode: "advance-one" },
+    { eventType: "promoted", examDate: "2026-09-26", mode: "target", targetRank: { rankType: "kyu", rankValue: 5 } },
+    { eventType: "promoted", examDate: "2026-09-26", mode: "target", targetRank: { rankType: "dan", rankValue: 1 } },
+    { eventType: "recognized-at-entry", memberId: "ASD-000", mode: "target", rankDate: null, recognizedAt: "2026-09-26", targetRank: { rankType: "kyu", rankValue: 5 } },
+    { eventType: "recognized-at-entry", memberId: "ASD-000", mode: "target", rankDate: "2026-09-25", recognizedAt: "2026-09-26", targetRank: { rankType: "dan", rankValue: 1 } }
+  ];
+  const credentials: PromotionCredential[] = [];
+  for (const payload of payloads) {
+    const signedPromotion = { ...promotionCommon, keyId, payload };
+    const signedBytes = new TextEncoder().encode(canonicalizePromotionSigned(signedPromotion));
+    const wireSignature = new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, keyPair.privateKey, signedBytes));
+    assert.equal(wireSignature.length, 64);
+    const credential = parsePromotionCredential(JSON.stringify({ signed: signedPromotion, signature: encodeUnpaddedBase64Url(wireSignature) }));
+    assert.equal(await verifyPromotionCredential(credential, bootstrap), true);
+    const token = createCredentialTransportToken(credential);
+    assert.deepEqual(parsePromotionCredential(new TextDecoder().decode(decodeCanonicalBase64Url(token))), credential);
+    credentials.push(credential);
+  }
+
+  const credential = credentials[0];
+  const tamperedField = structuredClone(credential) as PromotionCredential;
+  if (tamperedField.signed.payload.eventType === "promoted") tamperedField.signed.payload.examDate = "2026-09-27";
+  assert.equal(await verifyPromotionCredential(tamperedField, bootstrap), false);
+  const tamperedSignature = structuredClone(credential) as PromotionCredential;
+  const signatureBytes = decodeCanonicalBase64Url(tamperedSignature.signature, 64);
+  signatureBytes[0] ^= 1;
+  tamperedSignature.signature = encodeUnpaddedBase64Url(signatureBytes);
+  assert.equal(await verifyPromotionCredential(tamperedSignature, bootstrap), false);
 });
 
 test("JCS preserves Korean UTF-8 and JSON escaping without Unicode normalization", () => {
@@ -147,18 +284,25 @@ test("production bridge uses idempotent alias semantics and has no deletion path
   assert.match(bridge, /if \(!keyStore\.containsAlias\(PRODUCTION_ALIAS\)\)/);
   assert.match(bridge, /generated \? "generated" : "reused"/);
   assert.match(bridge, /privateKey\.getEncoded\(\)/);
+  assert.match(bridge, /issueMembershipCredential/);
+  assert.match(bridge, /issuePromotionCredential/);
+  assert.match(bridge, /private Result signCredential\(/);
+  assert.equal((bridge.match(/StrictEcdsaDer\.toP256Raw/g) ?? []).length, 1);
   assert.doesNotMatch(bridge, /deleteEntry|privateKeyBytes|privateKeyBase64/);
   assert.match(activity, /SamsungdangCredentialBridge/);
 });
 
-test("issuer UI is test-fixture-only and the packaged route is explicit", async () => {
+test("issuer UI keeps Membership disabled and adds stateless test-only Promotion issuance", async () => {
   const issuerPage = await readFile(new URL("../app/credential-issuer/page.tsx", import.meta.url), "utf8");
   const homePage = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   assert.match(homePage, /href="\/credential-issuer\.html"/);
   assert.match(issuerPage, /테스트회원 \(실제 회원 아님\)/);
   assert.match(issuerPage, /memberId: "ASD-000"/);
-  assert.match(issuerPage, /실제 회원 Credential 발급 — Phase 4H-B 이후 활성화/);
+  assert.match(issuerPage, /실제 회원 Membership Credential 발급 — 운영 승인 전 비활성/);
   assert.match(issuerPage, /<button className="credential-production-disabled" type="button" disabled>/);
+  assert.match(issuerPage, /test-only Promotion Credential 생성/);
+  assert.match(issuerPage, /advance-one/);
+  assert.match(issuerPage, /recognized-at-entry/);
   assert.doesNotMatch(issuerPage, /localStorage|indexedDB|deleteEntry/);
   assert.doesNotMatch(issuerPage, /https:\/\/(?!example\.invalid)/);
 });

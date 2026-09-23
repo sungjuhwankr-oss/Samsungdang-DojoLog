@@ -2,22 +2,28 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- packaged static APK route */
 
 import { useMemo, useState, useSyncExternalStore } from "react";
-import { FileDown, KeyRound, ShieldCheck } from "lucide-react";
+import { Award, FileDown, KeyRound, ShieldCheck } from "lucide-react";
 
 import { saveBackupFile } from "../backup-file";
 import {
   createCredentialTransportToken,
   membershipInputErrors,
   parseMembershipCredential,
+  parsePromotionCredential,
   parseTrustedKeyBootstrap,
+  promotionInputErrors,
   verifyMembershipCredential,
+  verifyPromotionCredential,
   type MembershipCredential,
   type MembershipInput,
+  type PromotionCredential,
+  type PromotionPayload,
   type TrustedKeyBootstrap
 } from "../credential-v1";
 import {
   hasNativeCredentialBridge,
   issueNativeMembershipCredential,
+  issueNativePromotionCredential,
   provisionProductionCredentialKey
 } from "../credential-native";
 
@@ -29,6 +35,7 @@ const TEST_FIXTURE: MembershipInput = {
 
 const BOOTSTRAP_FILENAME = "Samsungdang-DojoLog-trusted-key-bootstrap-v1.json";
 const CREDENTIAL_FILENAME = "Samsungdang-DojoLog-membership-test-credential-v1.json";
+type PromotionKind = "advance-one" | "target" | "recognized-at-entry";
 
 export default function CredentialIssuerPage() {
   const nativeAvailable = useSyncExternalStore(
@@ -46,11 +53,50 @@ export default function CredentialIssuerPage() {
   const [transportToken, setTransportToken] = useState("");
   const [diagnostics, setDiagnostics] = useState<Record<string, unknown> | null>(null);
   const [selfVerified, setSelfVerified] = useState<boolean | null>(null);
+  const [promotionKind, setPromotionKind] = useState<PromotionKind>("advance-one");
+  const [examDate, setExamDate] = useState("2026-09-26");
+  const [rankType, setRankType] = useState<"kyu" | "dan">("kyu");
+  const [rankValue, setRankValue] = useState(5);
+  const [recognizedMemberId, setRecognizedMemberId] = useState("ASD-000");
+  const [rankDate, setRankDate] = useState("");
+  const [recognizedAt, setRecognizedAt] = useState("2026-09-26");
+  const [promotionCredential, setPromotionCredential] = useState<PromotionCredential | null>(null);
+  const [promotionJson, setPromotionJson] = useState("");
+  const [promotionToken, setPromotionToken] = useState("");
+  const [promotionDiagnostics, setPromotionDiagnostics] = useState<Record<string, unknown> | null>(null);
+  const [promotionVerified, setPromotionVerified] = useState<boolean | null>(null);
 
   const errors = useMemo(() => membershipInputErrors(input), [input]);
   const exactFixture = input.name === TEST_FIXTURE.name
     && input.memberId === TEST_FIXTURE.memberId
     && input.joinedAt === TEST_FIXTURE.joinedAt;
+  const promotionPayload = useMemo<PromotionPayload>(() => {
+    if (promotionKind === "advance-one") {
+      return { eventType: "promoted", examDate, mode: "advance-one" };
+    }
+    if (promotionKind === "target") {
+      return {
+        eventType: "promoted",
+        examDate,
+        mode: "target",
+        targetRank: { rankType, rankValue }
+      };
+    }
+    return {
+      eventType: "recognized-at-entry",
+      memberId: recognizedMemberId,
+      mode: "target",
+      rankDate: rankDate || null,
+      recognizedAt,
+      targetRank: { rankType, rankValue }
+    };
+  }, [examDate, promotionKind, rankDate, rankType, rankValue, recognizedAt, recognizedMemberId]);
+  const promotionErrors = useMemo(() => promotionInputErrors(promotionPayload), [promotionPayload]);
+  const promotionFilename = promotionKind === "advance-one"
+    ? "Samsungdang-DojoLog-promotion-advance-one-test-credential-v1.json"
+    : promotionKind === "target"
+      ? "Samsungdang-DojoLog-promotion-target-test-credential-v1.json"
+      : "Samsungdang-DojoLog-promotion-recognized-at-entry-test-credential-v1.json";
 
   async function provision() {
     setBusy(true);
@@ -103,6 +149,42 @@ export default function CredentialIssuerPage() {
     }
   }
 
+  async function issuePromotionFixture() {
+    if (promotionErrors.length) return;
+    setBusy(true);
+    setPromotionVerified(null);
+    setMessage("test-only Promotion Credential을 생성하고 있습니다.");
+    try {
+      const result = await issueNativePromotionCredential(promotionPayload);
+      if (result.status !== "success" || !result.json || !result.bootstrap) {
+        throw new Error(result.message ?? "promotion credential issuance failed");
+      }
+      const parsedCredential = parsePromotionCredential(result.json);
+      const parsedBootstrap = parseTrustedKeyBootstrap(result.bootstrap);
+      const expectedToken = createCredentialTransportToken(parsedCredential);
+      if (result.transportToken !== expectedToken) throw new Error("native transport token mismatch");
+      const verified = await verifyPromotionCredential(parsedCredential, parsedBootstrap);
+      if (!verified) throw new Error("Promotion Credential 공개키 self-verification에 실패했습니다.");
+      setPromotionCredential(parsedCredential);
+      setPromotionJson(result.json);
+      setBootstrap(parsedBootstrap);
+      setBootstrapJson(result.bootstrap);
+      setPromotionToken(expectedToken);
+      setPromotionDiagnostics(result.diagnostics ? JSON.parse(result.diagnostics) : null);
+      setPromotionVerified(true);
+      setMessage("test-only Promotion Credential 생성과 공개키 self-verification을 완료했습니다.");
+    } catch (error) {
+      setPromotionCredential(null);
+      setPromotionJson("");
+      setPromotionToken("");
+      setPromotionDiagnostics(null);
+      setPromotionVerified(false);
+      setMessage(error instanceof Error ? error.message : "Promotion Credential 생성에 실패했습니다.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function exportJson(filename: string, json: string) {
     if (!json) return;
     const result = await saveBackupFile(filename, `${JSON.stringify(JSON.parse(json), null, 2)}\n`);
@@ -112,9 +194,9 @@ export default function CredentialIssuerPage() {
   return (
     <main className="credential-shell">
       <header className="credential-header">
-        <span className="eyebrow">Phase 4H-A · development only</span>
-        <h1>Membership Credential v1 발급 기반</h1>
-        <p>실제 회원 발급은 수련자용 trusted-key 배포와 검증이 끝날 때까지 비활성 상태입니다.</p>
+        <span className="eyebrow">Phase 4I-A · development only</span>
+        <h1>Credential v1 발급 기반</h1>
+        <p>기존 Membership 회귀검증과 test-only Promotion Credential 발급을 위한 개발 화면입니다.</p>
         <a href="/">지도자용 앱으로 돌아가기</a>
       </header>
 
@@ -154,7 +236,36 @@ export default function CredentialIssuerPage() {
           test-only Membership Credential 생성
         </button>
         <button className="credential-production-disabled" type="button" disabled>
-          실제 회원 Credential 발급 — Phase 4H-B 이후 활성화
+          실제 회원 Membership Credential 발급 — 운영 승인 전 비활성
+        </button>
+      </section>
+
+      <section className="panel credential-section">
+        <div className="credential-section-title"><Award /><div><span>3</span><h2>Promotion issuer test fixture</h2></div></div>
+        <p>실제 회원별 발급 이력을 저장하지 않는 일회성 test-only 입력입니다.</p>
+        <div className="credential-form">
+          <label><span>종류</span><select value={promotionKind} onChange={event => setPromotionKind(event.target.value as PromotionKind)}>
+            <option value="advance-one">일반 심사 +1</option>
+            <option value="target">특별승급 target</option>
+            <option value="recognized-at-entry">입회·이적 시 인정</option>
+          </select></label>
+          {promotionKind !== "recognized-at-entry" && <label><span>심사일</span><input type="date" value={examDate} onChange={event => setExamDate(event.target.value)} /></label>}
+          {promotionKind === "recognized-at-entry" && <>
+            <label><span>회원번호</span><input value={recognizedMemberId} onChange={event => setRecognizedMemberId(event.target.value)} /></label>
+            <label><span>원 단급 취득일 (모르면 비움)</span><input type="date" value={rankDate} onChange={event => setRankDate(event.target.value)} /></label>
+            <label><span>삼성당 인정일</span><input type="date" value={recognizedAt} onChange={event => setRecognizedAt(event.target.value)} /></label>
+          </>}
+          {promotionKind !== "advance-one" && <>
+            <label><span>목표 단급 종류</span><select value={rankType} onChange={event => setRankType(event.target.value as "kyu" | "dan")}>
+              <option value="kyu">급</option>
+              <option value="dan">단</option>
+            </select></label>
+            <label><span>목표 단급 값</span><input type="number" min="1" max={rankType === "kyu" ? 9 : undefined} value={rankValue} onChange={event => setRankValue(Number(event.target.value))} /></label>
+          </>}
+        </div>
+        {promotionErrors.map(error => <p className="credential-error" key={error}>{error}</p>)}
+        <button className="primary large" type="button" disabled={!nativeAvailable || busy || promotionErrors.length > 0} onClick={issuePromotionFixture}>
+          test-only Promotion Credential 생성
         </button>
       </section>
 
@@ -174,6 +285,26 @@ export default function CredentialIssuerPage() {
         {credentialJson && <pre className="credential-preview">{JSON.stringify(credential, null, 2)}</pre>}
         <button className="ghost full" type="button" disabled={!credentialJson || busy} onClick={() => exportJson(CREDENTIAL_FILENAME, credentialJson)}>
           <FileDown />sample Membership Credential v1 저장
+        </button>
+      </section>
+
+      <section className="panel credential-section" aria-live="polite">
+        <h2>Promotion 검증 결과</h2>
+        {promotionCredential && <dl className="credential-diagnostics">
+          <div><dt>종류</dt><dd>{promotionCredential.signed.payload.eventType} / {promotionCredential.signed.payload.mode}</dd></div>
+          <div><dt>credentialId</dt><dd>{promotionCredential.signed.credentialId}</dd></div>
+          <div><dt>keyId</dt><dd>{promotionCredential.signed.keyId}</dd></div>
+          <div><dt>issuedAt</dt><dd>{promotionCredential.signed.issuedAt}</dd></div>
+          <div><dt>signature</dt><dd>64-byte r||s · unpadded base64url</dd></div>
+          <div><dt>self verify</dt><dd>{promotionVerified ? "PASS" : "미검증"}</dd></div>
+          <div><dt>transport token</dt><dd>{promotionToken.length} characters</dd></div>
+          <div><dt>HTTPS route</dt><dd>Phase 4I-B production route 미확정</dd></div>
+        </dl>}
+        {promotionDiagnostics && <pre className="credential-preview">{JSON.stringify(promotionDiagnostics, null, 2)}</pre>}
+        {promotionJson && <pre className="credential-preview">{JSON.stringify(promotionCredential, null, 2)}</pre>}
+        {promotionVerified === false && <p className="credential-error">Promotion Credential 검증에 실패했습니다.</p>}
+        <button className="ghost full" type="button" disabled={!promotionJson || busy} onClick={() => exportJson(promotionFilename, promotionJson)}>
+          <FileDown />현재 Promotion Credential v1 저장
         </button>
       </section>
     </main>

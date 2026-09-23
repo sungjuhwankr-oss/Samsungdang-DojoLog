@@ -11,6 +11,7 @@ public final class CredentialV1 {
     public static final int VERSION = 1;
     public static final String ISSUER = "aikido-samsungdang";
     public static final String TYPE_MEMBERSHIP = "membership";
+    public static final String TYPE_PROMOTION = "promotion";
     public static final String BOOTSTRAP_SCHEMA =
             "samsungdang-dojolog-trusted-key-bootstrap";
 
@@ -21,6 +22,7 @@ public final class CredentialV1 {
             "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z");
     private static final char[] BASE64_URL =
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_".toCharArray();
+    private static final long MAX_SAFE_INTEGER = 9007199254740991L;
 
     private CredentialV1() {
     }
@@ -39,6 +41,35 @@ public final class CredentialV1 {
         if (!isCalendarDate(joinedAt)) {
             throw new IllegalArgumentException("joinedAt must be a real YYYY-MM-DD date");
         }
+    }
+
+    public static void validatePromotionAdvanceOne(String examDate) {
+        requireCalendarDate(examDate, "examDate");
+    }
+
+    public static void validatePromotionTarget(
+            String examDate,
+            String rankType,
+            long rankValue) {
+        requireCalendarDate(examDate, "examDate");
+        validateRank(rankType, rankValue);
+    }
+
+    public static void validatePromotionRecognizedAtEntry(
+            String memberId,
+            String rankDate,
+            String recognizedAt,
+            String rankType,
+            long rankValue) {
+        if (memberId == null || !MEMBER_ID.matcher(memberId).matches()) {
+            throw new IllegalArgumentException("memberId must match ASD-000");
+        }
+        if (rankDate != null) requireCalendarDate(rankDate, "rankDate");
+        requireCalendarDate(recognizedAt, "recognizedAt");
+        if (rankDate != null && rankDate.compareTo(recognizedAt) > 0) {
+            throw new IllegalArgumentException("rankDate must not be after recognizedAt");
+        }
+        validateRank(rankType, rankValue);
     }
 
     public static String credentialId(byte[] randomBytes) {
@@ -81,16 +112,116 @@ public final class CredentialV1 {
             throw new IllegalArgumentException("issuedAt must be a real UTC second");
         }
 
+        String payload = "{\"joinedAt\":" + quote(joinedAt)
+                + ",\"memberId\":" + quote(memberId)
+                + ",\"name\":" + quote(name) + "}";
+        return canonicalSigned(credentialId, keyId, issuedAt, TYPE_MEMBERSHIP, payload);
+    }
+
+    public static String canonicalPromotionAdvanceOneSigned(
+            String credentialId,
+            String keyId,
+            String issuedAt,
+            String examDate) {
+        validatePromotionAdvanceOne(examDate);
+        String payload = "{\"eventType\":\"promoted\",\"examDate\":" + quote(examDate)
+                + ",\"mode\":\"advance-one\"}";
+        return canonicalSigned(credentialId, keyId, issuedAt, TYPE_PROMOTION, payload);
+    }
+
+    public static String canonicalPromotionTargetSigned(
+            String credentialId,
+            String keyId,
+            String issuedAt,
+            String examDate,
+            String rankType,
+            long rankValue) {
+        validatePromotionTarget(examDate, rankType, rankValue);
+        String payload = "{\"eventType\":\"promoted\",\"examDate\":" + quote(examDate)
+                + ",\"mode\":\"target\",\"targetRank\":"
+                + canonicalRank(rankType, rankValue) + "}";
+        return canonicalSigned(credentialId, keyId, issuedAt, TYPE_PROMOTION, payload);
+    }
+
+    public static String canonicalPromotionRecognizedAtEntrySigned(
+            String credentialId,
+            String keyId,
+            String issuedAt,
+            String memberId,
+            String rankDate,
+            String recognizedAt,
+            String rankType,
+            long rankValue) {
+        validatePromotionRecognizedAtEntry(
+                memberId, rankDate, recognizedAt, rankType, rankValue);
+        String payload = "{\"eventType\":\"recognized-at-entry\",\"memberId\":"
+                + quote(memberId)
+                + ",\"mode\":\"target\",\"rankDate\":"
+                + (rankDate == null ? "null" : quote(rankDate))
+                + ",\"recognizedAt\":" + quote(recognizedAt)
+                + ",\"targetRank\":" + canonicalRank(rankType, rankValue) + "}";
+        return canonicalSigned(credentialId, keyId, issuedAt, TYPE_PROMOTION, payload);
+    }
+
+    private static String canonicalSigned(
+            String credentialId,
+            String keyId,
+            String issuedAt,
+            String type,
+            String canonicalPayload) {
+        if (credentialId == null || !CREDENTIAL_ID.matcher(credentialId).matches()) {
+            throw new IllegalArgumentException("invalid credentialId");
+        }
+        if (keyId == null || !KEY_ID.matcher(keyId).matches()) {
+            throw new IllegalArgumentException("invalid keyId");
+        }
+        if (!isUtcSecond(issuedAt)) {
+            throw new IllegalArgumentException("issuedAt must be a real UTC second");
+        }
+        if (!TYPE_MEMBERSHIP.equals(type) && !TYPE_PROMOTION.equals(type)) {
+            throw new IllegalArgumentException("unsupported credential type");
+        }
+        if (canonicalPayload == null || canonicalPayload.length() == 0) {
+            throw new IllegalArgumentException("canonical payload is required");
+        }
         return "{\"credentialId\":" + quote(credentialId)
                 + ",\"credentialVersion\":1"
                 + ",\"issuedAt\":" + quote(issuedAt)
                 + ",\"issuer\":" + quote(ISSUER)
                 + ",\"keyId\":" + quote(keyId)
-                + ",\"payload\":{\"joinedAt\":" + quote(joinedAt)
-                + ",\"memberId\":" + quote(memberId)
-                + ",\"name\":" + quote(name) + "}"
+                + ",\"payload\":" + canonicalPayload
                 + ",\"schema\":" + quote(SCHEMA)
-                + ",\"type\":" + quote(TYPE_MEMBERSHIP) + "}";
+                + ",\"type\":" + quote(type) + "}";
+    }
+
+    private static String canonicalRank(String rankType, long rankValue) {
+        validateRank(rankType, rankValue);
+        return "{\"rankType\":" + quote(rankType) + ",\"rankValue\":" + rankValue + "}";
+    }
+
+    private static void validateRank(String rankType, long rankValue) {
+        if (rankValue > MAX_SAFE_INTEGER) {
+            throw new IllegalArgumentException("rankValue must be a safe integer");
+        }
+        if ("kyu".equals(rankType)) {
+            if (rankValue < 1 || rankValue > 9) {
+                throw new IllegalArgumentException("kyu rankValue must be from 1 through 9");
+            }
+            return;
+        }
+        if ("dan".equals(rankType)) {
+            if (rankValue <= 0) {
+                throw new IllegalArgumentException("dan rankValue must be positive");
+            }
+            return;
+        }
+        throw new IllegalArgumentException("rankType must be kyu or dan");
+    }
+
+    private static void requireCalendarDate(String value, String field) {
+        if (!isCalendarDate(value)) {
+            throw new IllegalArgumentException(field + " must be a real YYYY-MM-DD date");
+        }
     }
 
     public static String envelope(String canonicalSigned, String signatureBase64Url) {

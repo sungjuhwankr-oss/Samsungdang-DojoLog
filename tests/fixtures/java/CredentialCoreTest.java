@@ -36,12 +36,47 @@ public final class CredentialCoreTest {
                 + "\"memberId\":\"ASD-000\",\"name\":\"테스트회원\\n\\\"\\\\😀\"},"
                 + "\"schema\":\"samsungdang-dojolog-credential\",\"type\":\"membership\"}";
         require(canonical.equals(expected), "credential-specific RFC 8785 serialization");
+        String advanceOne = CredentialV1.canonicalPromotionAdvanceOneSigned(
+                credentialId, keyId, "2026-09-26T11:30:00Z", "2026-09-26");
+        require(advanceOne.equals("{\"credentialId\":\"c1_AAECAwQFBgcICQoLDA0ODw\","
+                + "\"credentialVersion\":1,\"issuedAt\":\"2026-09-26T11:30:00Z\","
+                + "\"issuer\":\"aikido-samsungdang\",\"keyId\":\"" + keyId + "\","
+                + "\"payload\":{\"eventType\":\"promoted\",\"examDate\":\"2026-09-26\","
+                + "\"mode\":\"advance-one\"},\"schema\":\"samsungdang-dojolog-credential\","
+                + "\"type\":\"promotion\"}"), "advance-one JCS");
+        String targetKyu = CredentialV1.canonicalPromotionTargetSigned(
+                credentialId, keyId, "2026-09-26T11:30:00Z",
+                "2026-09-26", "kyu", 5);
+        require(targetKyu.contains("\"targetRank\":{\"rankType\":\"kyu\",\"rankValue\":5}"),
+                "target kyu JCS");
+        String targetDan = CredentialV1.canonicalPromotionTargetSigned(
+                credentialId, keyId, "2026-09-26T11:30:00Z",
+                "2026-09-26", "dan", 1);
+        require(targetDan.contains("\"targetRank\":{\"rankType\":\"dan\",\"rankValue\":1}"),
+                "target dan JCS");
+        String recognized = CredentialV1.canonicalPromotionRecognizedAtEntrySigned(
+                credentialId, keyId, "2026-09-26T11:30:00Z",
+                "ASD-000", null, "2026-09-26", "kyu", 5);
+        require(recognized.contains("\"payload\":{\"eventType\":\"recognized-at-entry\","
+                + "\"memberId\":\"ASD-000\",\"mode\":\"target\",\"rankDate\":null,"
+                + "\"recognizedAt\":\"2026-09-26\",\"targetRank\":{\"rankType\":\"kyu\","
+                + "\"rankValue\":5}}"), "recognized-at-entry JCS");
         expectFailure(() -> CredentialV1.canonicalMembershipSigned(
                 credentialId, keyId, "2026-09-21T08:30:60Z",
                 name, "ASD-000", "2026-09-21"), "invalid UTC second");
         expectFailure(() -> CredentialV1.validateMembership("회원", "ASD-X01", "2026-09-21"), "memberId");
         expectFailure(() -> CredentialV1.validateMembership("회원", "ASD-001", "2026-02-30"), "joinedAt");
         expectFailure(() -> CredentialV1.validateMembership("invalid\ud800", "ASD-001", "2026-09-21"), "invalid Unicode");
+        expectFailure(() -> CredentialV1.validatePromotionAdvanceOne("2026-02-30"), "invalid examDate");
+        expectFailure(() -> CredentialV1.validatePromotionTarget("2026-09-26", "kyu", 0), "kyu zero");
+        expectFailure(() -> CredentialV1.validatePromotionTarget("2026-09-26", "kyu", 10), "kyu ten");
+        expectFailure(() -> CredentialV1.validatePromotionTarget("2026-09-26", "dan", 0), "dan zero");
+        expectFailure(() -> CredentialV1.validatePromotionTarget("2026-09-26", "dan", 9007199254740992L), "unsafe dan");
+        expectFailure(() -> CredentialV1.validatePromotionTarget("2026-09-26", "other", 1), "rank type");
+        expectFailure(() -> CredentialV1.validatePromotionRecognizedAtEntry(
+                "ASD-000", "2026-09-27", "2026-09-26", "kyu", 5), "rankDate ordering");
+        CredentialV1.validatePromotionRecognizedAtEntry(
+                "ASD-000", "2026-09-25", "2026-09-26", "dan", 1);
 
         byte[] signedBytes = canonical.getBytes(StandardCharsets.UTF_8);
         Signature signer = Signature.getInstance("SHA256withECDSA");
@@ -63,6 +98,18 @@ public final class CredentialCoreTest {
         verifier.initVerify(keyPair.getPublic());
         verifier.update((canonical + " ").getBytes(StandardCharsets.UTF_8));
         require(!verifier.verify(der), "signed field tamper rejection");
+
+        signer.initSign(keyPair.getPrivate());
+        signer.update(advanceOne.getBytes(StandardCharsets.UTF_8));
+        byte[] promotionDer = signer.sign();
+        require(StrictEcdsaDer.toP256Raw(promotionDer).length == 64,
+                "promotion uses the common DER to fixed-width path");
+        verifier.initVerify(keyPair.getPublic());
+        verifier.update(advanceOne.getBytes(StandardCharsets.UTF_8));
+        require(verifier.verify(promotionDer), "promotion signature verification");
+        verifier.initVerify(keyPair.getPublic());
+        verifier.update(targetKyu.getBytes(StandardCharsets.UTF_8));
+        require(!verifier.verify(promotionDer), "promotion signed field tamper rejection");
 
         expectFailure(() -> StrictEcdsaDer.toP256Raw(Arrays.copyOf(der, der.length + 1)), "trailing DER bytes");
         expectFailure(() -> StrictEcdsaDer.toP256Raw(new byte[]{0x30, 0x06, 0x02, 0x01, 0, 0x02, 0x01, 1}), "zero r");
