@@ -26,11 +26,13 @@ import java.nio.charset.StandardCharsets;
 public final class SaveActivity extends MainActivity {
     private static final int CREATE_BACKUP = 9901;
     private static final int OPEN_BACKUP = 9902;
+    private static final int CREATE_PNG = 9903;
     private static final int MAX_BACKUP_BYTES = 10 * 1024 * 1024;
     private static final int MAX_SHARE_IMAGE_BYTES = 4 * 1024 * 1024;
     private WebView appWebView;
     private String pendingFilename;
     private String pendingContent;
+    private byte[] pendingPng;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -161,6 +163,37 @@ public final class SaveActivity extends MainActivity {
         });
     }
 
+    @JavascriptInterface
+    public void savePng(final String pngBase64, final String filename) {
+        if (pngBase64 == null || filename == null) return;
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                try {
+                    if (!isTrustedAppPage()) {
+                        emitImageSave("error");
+                        return;
+                    }
+                    byte[] png = Base64.decode(pngBase64, Base64.DEFAULT);
+                    if (png.length == 0 || png.length > MAX_SHARE_IMAGE_BYTES) {
+                        throw new IllegalArgumentException("PNG image too large");
+                    }
+                    String safeName = filename.replaceAll("[^A-Za-z0-9._-]", "_");
+                    pendingFilename = safeName.endsWith(".png") ? safeName : safeName + ".png";
+                    pendingPng = png;
+                    Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("image/png");
+                    intent.putExtra(Intent.EXTRA_TITLE, pendingFilename);
+                    startActivityForResult(intent, CREATE_PNG);
+                } catch (Exception error) {
+                    pendingFilename = null;
+                    pendingPng = null;
+                    emitImageSave("error");
+                }
+            }
+        });
+    }
+
     private boolean isYouTubeHost(String host) {
         if (host == null) return false;
         String normalized = host.toLowerCase();
@@ -171,7 +204,25 @@ public final class SaveActivity extends MainActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode != CREATE_BACKUP && requestCode != OPEN_BACKUP) return;
+        if (requestCode != CREATE_BACKUP && requestCode != OPEN_BACKUP && requestCode != CREATE_PNG) return;
+        if (requestCode == CREATE_PNG) {
+            if (resultCode != Activity.RESULT_OK || data == null || data.getData() == null) {
+                pendingFilename = null;
+                pendingPng = null;
+                emitImageSave("cancel");
+                return;
+            }
+            try {
+                writeBytes(data.getData(), pendingPng == null ? new byte[0] : pendingPng);
+                emitImageSave("success");
+            } catch (Exception error) {
+                emitImageSave("error");
+            } finally {
+                pendingFilename = null;
+                pendingPng = null;
+            }
+            return;
+        }
         String operation = requestCode == CREATE_BACKUP ? "save" : "open";
         if (resultCode != Activity.RESULT_OK || data == null || data.getData() == null) {
             emit(operation, "cancel", null, null);
@@ -194,11 +245,15 @@ public final class SaveActivity extends MainActivity {
     }
 
     private void writeUtf8(Uri uri, String content) throws Exception {
+        writeBytes(uri, content.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private void writeBytes(Uri uri, byte[] content) throws Exception {
         ContentResolver resolver = getContentResolver();
         OutputStream stream = resolver.openOutputStream(uri);
         if (stream == null) throw new IllegalStateException("No output stream");
         try {
-            stream.write(content.getBytes(StandardCharsets.UTF_8));
+            stream.write(content);
             stream.flush();
         } finally {
             stream.close();
@@ -249,6 +304,13 @@ public final class SaveActivity extends MainActivity {
     private void emitShare(String status) {
         if (appWebView == null) return;
         String script = "window.dispatchEvent(new CustomEvent('samsungdang-share-result',{detail:{status:"
+                + JSONObject.quote(status) + "}}))";
+        appWebView.evaluateJavascript(script, null);
+    }
+
+    private void emitImageSave(String status) {
+        if (appWebView == null) return;
+        String script = "window.dispatchEvent(new CustomEvent('samsungdang-image-save-result',{detail:{status:"
                 + JSONObject.quote(status) + "}}))";
         appWebView.evaluateJavascript(script, null);
     }

@@ -16,7 +16,7 @@ import {
   serializeSessionSharePayload,
 } from "../app/session-share";
 import { createQrDataUrl } from "../app/session-share-card";
-import { hasNativeSessionShare, shareSessionCard, type ShareHost } from "../app/session-share-file";
+import { hasNativeSessionShare, savePngImage, shareSessionCard, type ShareHost } from "../app/session-share-file";
 
 const katas = KATAS.slice(0, 7);
 const log: DojoLog = {
@@ -120,6 +120,25 @@ test("native bridge absence is safe and native sharing passes text and PNG once"
   } };
   assert.equal(await shareSessionCard("text", "data:image/png;base64,AA==", "card.png", target), "shared");
   assert.deepEqual(calls, [["text", "AA==", "card.png"]]);
+});
+
+test("native PNG save uses exact decoded image bytes and reports cancel safely", async () => {
+  const absent = new EventTarget() as ShareHost;
+  assert.equal(await savePngImage("data:image/png;base64,AA==", "qr.png", absent), "unavailable");
+  const calls: unknown[][] = [];
+  const target = new EventTarget() as ShareHost;
+  target.SamsungdangBackupBridge = { savePng: (...args) => {
+    calls.push(args);
+    target.dispatchEvent(new CustomEvent("samsungdang-image-save-result", { detail: { status: "success" } }));
+  } };
+  assert.equal(await savePngImage("data:image/png;base64,AA==", "qr.png", target), "saved");
+  assert.deepEqual(calls, [["AA==", "qr.png"]]);
+  const cancelled = new EventTarget() as ShareHost;
+  cancelled.SamsungdangBackupBridge = { savePng: () => {
+    cancelled.dispatchEvent(new CustomEvent("samsungdang-image-save-result", { detail: { status: "cancel" } }));
+  } };
+  assert.equal(await savePngImage("data:image/png;base64,AA==", "qr.png", cancelled), "cancelled");
+  assert.throws(() => savePngImage("not-png", "qr.png", target), /PNG/);
 });
 
 test("payload and share helpers do not mutate the journal state", () => {

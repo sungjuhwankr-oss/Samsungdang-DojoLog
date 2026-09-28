@@ -61,6 +61,26 @@ public final class CredentialCoreTest {
                 + "\"memberId\":\"ASD-000\",\"mode\":\"target\",\"rankDate\":null,"
                 + "\"recognizedAt\":\"2026-09-26\",\"targetRank\":{\"rankType\":\"kyu\","
                 + "\"rankValue\":5}}"), "recognized-at-entry JCS");
+        String special = CredentialV1.canonicalSpecialTrainingSigned(
+                credentialId,
+                "k1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "2026-10-24T04:00:00Z",
+                "st1_AAECAwQFBgcICQoLDA0ODw",
+                "Phase 4J 테스트 특별수련",
+                "special-training",
+                "2026-10-24",
+                null,
+                "테스트 지도자");
+        require(special.equals("{\"credentialId\":\"c1_AAECAwQFBgcICQoLDA0ODw\","
+                + "\"credentialVersion\":1,\"issuedAt\":\"2026-10-24T04:00:00Z\","
+                + "\"issuer\":\"aikido-samsungdang\","
+                + "\"keyId\":\"k1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\","
+                + "\"payload\":{\"category\":\"special-training\",\"endDate\":null,"
+                + "\"eventId\":\"st1_AAECAwQFBgcICQoLDA0ODw\","
+                + "\"instructor\":\"테스트 지도자\",\"startDate\":\"2026-10-24\","
+                + "\"title\":\"Phase 4J 테스트 특별수련\"},"
+                + "\"schema\":\"samsungdang-dojolog-credential\","
+                + "\"type\":\"special-training\"}"), "special-training TS/Java JCS parity");
         expectFailure(() -> CredentialV1.canonicalMembershipSigned(
                 credentialId, keyId, "2026-09-21T08:30:60Z",
                 name, "ASD-000", "2026-09-21"), "invalid UTC second");
@@ -77,6 +97,43 @@ public final class CredentialCoreTest {
                 "ASD-000", "2026-09-27", "2026-09-26", "kyu", 5), "rankDate ordering");
         CredentialV1.validatePromotionRecognizedAtEntry(
                 "ASD-000", "2026-09-25", "2026-09-26", "dan", 1);
+        CredentialV1.validateSpecialTraining(
+                "st1_AAECAwQFBgcICQoLDA0ODw", "특별수련", "seminar",
+                "2026-10-24", "2026-10-25", "지도자");
+        expectFailure(() -> CredentialV1.validateSpecialTraining(
+                "st1_short", "특별수련", "seminar",
+                "2026-10-24", null, "지도자"), "invalid special eventId");
+        expectFailure(() -> CredentialV1.validateSpecialTraining(
+                "st1_AAECAwQFBgcICQoLDA0ODw", " ", "seminar",
+                "2026-10-24", null, "지도자"), "blank special title");
+        expectFailure(() -> CredentialV1.validateSpecialTraining(
+                "st1_AAECAwQFBgcICQoLDA0ODw", "　", "seminar",
+                "2026-10-24", null, "지도자"), "Unicode-blank special title");
+        expectFailure(() -> CredentialV1.validateSpecialTraining(
+                "st1_AAECAwQFBgcICQoLDA0ODw", new String(new char[201]).replace('\0', 'x'),
+                "seminar", "2026-10-24", null, "지도자"), "overlength special title");
+        expectFailure(() -> CredentialV1.validateSpecialTraining(
+                "st1_AAECAwQFBgcICQoLDA0ODw", "invalid\ud800", "seminar",
+                "2026-10-24", null, "지도자"), "invalid special title Unicode");
+        expectFailure(() -> CredentialV1.validateSpecialTraining(
+                "st1_AAECAwQFBgcICQoLDA0ODw", "특별수련", "unknown",
+                "2026-10-24", null, "지도자"), "unknown special category");
+        expectFailure(() -> CredentialV1.validateSpecialTraining(
+                "st1_AAECAwQFBgcICQoLDA0ODw", "특별수련", "seminar",
+                "2026-02-30", null, "지도자"), "invalid special startDate");
+        expectFailure(() -> CredentialV1.validateSpecialTraining(
+                "st1_AAECAwQFBgcICQoLDA0ODw", "특별수련", "seminar",
+                "2026-10-24", "2026-02-30", "지도자"), "invalid special endDate");
+        expectFailure(() -> CredentialV1.validateSpecialTraining(
+                "st1_AAECAwQFBgcICQoLDA0ODw", "특별수련", "seminar",
+                "2026-10-24", "2026-10-23", "지도자"), "special date ordering");
+        expectFailure(() -> CredentialV1.validateSpecialTraining(
+                "st1_AAECAwQFBgcICQoLDA0ODw", "특별수련", "seminar",
+                "2026-10-24", null, "invalid\ud800"), "invalid special instructor Unicode");
+        expectFailure(() -> CredentialV1.validateSpecialTraining(
+                "st1_AAECAwQFBgcICQoLDA0ODw", "특별수련", "seminar",
+                "2026-10-24", null, new String(new char[201]).replace('\0', 'x')),
+                "overlength special instructor");
 
         byte[] signedBytes = canonical.getBytes(StandardCharsets.UTF_8);
         Signature signer = Signature.getInstance("SHA256withECDSA");
@@ -110,6 +167,18 @@ public final class CredentialCoreTest {
         verifier.initVerify(keyPair.getPublic());
         verifier.update(targetKyu.getBytes(StandardCharsets.UTF_8));
         require(!verifier.verify(promotionDer), "promotion signed field tamper rejection");
+
+        signer.initSign(keyPair.getPrivate());
+        signer.update(special.getBytes(StandardCharsets.UTF_8));
+        byte[] specialDer = signer.sign();
+        require(StrictEcdsaDer.toP256Raw(specialDer).length == 64,
+                "special-training uses the common DER to fixed-width path");
+        verifier.initVerify(keyPair.getPublic());
+        verifier.update(special.getBytes(StandardCharsets.UTF_8));
+        require(verifier.verify(specialDer), "special-training signature verification");
+        verifier.initVerify(keyPair.getPublic());
+        verifier.update((special + " ").getBytes(StandardCharsets.UTF_8));
+        require(!verifier.verify(specialDer), "special-training signed field tamper rejection");
 
         expectFailure(() -> StrictEcdsaDer.toP256Raw(Arrays.copyOf(der, der.length + 1)), "trailing DER bytes");
         expectFailure(() -> StrictEcdsaDer.toP256Raw(new byte[]{0x30, 0x06, 0x02, 0x01, 0, 0x02, 0x01, 1}), "zero r");

@@ -12,12 +12,15 @@ public final class CredentialV1 {
     public static final String ISSUER = "aikido-samsungdang";
     public static final String TYPE_MEMBERSHIP = "membership";
     public static final String TYPE_PROMOTION = "promotion";
+    public static final String TYPE_SPECIAL_TRAINING = "special-training";
     public static final String BOOTSTRAP_SCHEMA =
             "samsungdang-dojolog-trusted-key-bootstrap";
 
     private static final Pattern MEMBER_ID = Pattern.compile("ASD-[0-9]{3}");
     private static final Pattern KEY_ID = Pattern.compile("k1_[A-Za-z0-9_-]{43}");
     private static final Pattern CREDENTIAL_ID = Pattern.compile("c1_[A-Za-z0-9_-]{22}");
+    private static final Pattern SPECIAL_TRAINING_EVENT_ID =
+            Pattern.compile("st1_[A-Za-z0-9_-]{22}");
     private static final Pattern ISSUED_AT = Pattern.compile(
             "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z");
     private static final char[] BASE64_URL =
@@ -70,6 +73,35 @@ public final class CredentialV1 {
             throw new IllegalArgumentException("rankDate must not be after recognizedAt");
         }
         validateRank(rankType, rankValue);
+    }
+
+    public static void validateSpecialTraining(
+            String eventId,
+            String title,
+            String category,
+            String startDate,
+            String endDate,
+            String instructor) {
+        if (eventId == null || !SPECIAL_TRAINING_EVENT_ID.matcher(eventId).matches()) {
+            throw new IllegalArgumentException(
+                    "eventId must be st1_ plus 16 random bytes as unpadded base64url");
+        }
+        validateRequiredText(title, "title");
+        validateRequiredText(instructor, "instructor");
+        if (!"seminar".equals(category)
+                && !"workshop".equals(category)
+                && !"special-training".equals(category)
+                && !"camp".equals(category)
+                && !"other".equals(category)) {
+            throw new IllegalArgumentException("invalid special-training category");
+        }
+        requireCalendarDate(startDate, "startDate");
+        if (endDate != null) {
+            requireCalendarDate(endDate, "endDate");
+            if (endDate.compareTo(startDate) < 0) {
+                throw new IllegalArgumentException("endDate must not be before startDate");
+            }
+        }
     }
 
     public static String credentialId(byte[] randomBytes) {
@@ -163,6 +195,27 @@ public final class CredentialV1 {
         return canonicalSigned(credentialId, keyId, issuedAt, TYPE_PROMOTION, payload);
     }
 
+    public static String canonicalSpecialTrainingSigned(
+            String credentialId,
+            String keyId,
+            String issuedAt,
+            String eventId,
+            String title,
+            String category,
+            String startDate,
+            String endDate,
+            String instructor) {
+        validateSpecialTraining(eventId, title, category, startDate, endDate, instructor);
+        String payload = "{\"category\":" + quote(category)
+                + ",\"endDate\":" + (endDate == null ? "null" : quote(endDate))
+                + ",\"eventId\":" + quote(eventId)
+                + ",\"instructor\":" + quote(instructor)
+                + ",\"startDate\":" + quote(startDate)
+                + ",\"title\":" + quote(title) + "}";
+        return canonicalSigned(
+                credentialId, keyId, issuedAt, TYPE_SPECIAL_TRAINING, payload);
+    }
+
     private static String canonicalSigned(
             String credentialId,
             String keyId,
@@ -178,7 +231,9 @@ public final class CredentialV1 {
         if (!isUtcSecond(issuedAt)) {
             throw new IllegalArgumentException("issuedAt must be a real UTC second");
         }
-        if (!TYPE_MEMBERSHIP.equals(type) && !TYPE_PROMOTION.equals(type)) {
+        if (!TYPE_MEMBERSHIP.equals(type)
+                && !TYPE_PROMOTION.equals(type)
+                && !TYPE_SPECIAL_TRAINING.equals(type)) {
             throw new IllegalArgumentException("unsupported credential type");
         }
         if (canonicalPayload == null || canonicalPayload.length() == 0) {
@@ -222,6 +277,28 @@ public final class CredentialV1 {
         if (!isCalendarDate(value)) {
             throw new IllegalArgumentException(field + " must be a real YYYY-MM-DD date");
         }
+    }
+
+    private static void validateRequiredText(String value, String field) {
+        requireValidUnicode(value, field);
+        if (isBlank(value)) {
+            throw new IllegalArgumentException(field + " must not be blank");
+        }
+        if (value.length() > 200) {
+            throw new IllegalArgumentException(field + " must not exceed 200 code units");
+        }
+    }
+
+    private static boolean isBlank(String value) {
+        for (int index = 0; index < value.length(); index++) {
+            char character = value.charAt(index);
+            if (!Character.isWhitespace(character)
+                    && !Character.isSpaceChar(character)
+                    && character != '\ufeff') {
+                return false;
+            }
+        }
+        return true;
     }
 
     public static String envelope(String canonicalSigned, String signatureBase64Url) {

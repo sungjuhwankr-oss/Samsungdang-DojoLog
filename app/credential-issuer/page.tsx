@@ -1,31 +1,47 @@
 "use client";
 /* eslint-disable @next/next/no-html-link-for-pages -- packaged static APK route */
+/* eslint-disable @next/next/no-img-element -- QR is a generated data URL */
 
 import { useMemo, useState, useSyncExternalStore } from "react";
-import { Award, FileDown, KeyRound, ShieldCheck } from "lucide-react";
+import { Award, Download, FileDown, KeyRound, QrCode, RefreshCw, ShieldCheck } from "lucide-react";
 
 import { saveBackupFile } from "../backup-file";
 import {
   createCredentialTransportToken,
+  generateSpecialTrainingEventId,
   membershipInputErrors,
   parseMembershipCredential,
   parsePromotionCredential,
+  parseSpecialTrainingCredential,
   parseTrustedKeyBootstrap,
   promotionInputErrors,
+  specialTrainingInputErrors,
   verifyMembershipCredential,
   verifyPromotionCredential,
+  verifySpecialTrainingCredential,
   type MembershipCredential,
   type MembershipInput,
   type PromotionCredential,
   type PromotionPayload,
+  type SpecialTrainingCategory,
+  type SpecialTrainingCredential,
+  type SpecialTrainingPayload,
   type TrustedKeyBootstrap
 } from "../credential-v1";
 import {
   hasNativeCredentialBridge,
   issueNativeMembershipCredential,
   issueNativePromotionCredential,
+  issueNativeSpecialTrainingCredential,
   provisionProductionCredentialKey
 } from "../credential-native";
+import { savePngImage } from "../session-share-file";
+import {
+  createSpecialTrainingProductionLink,
+  createSpecialTrainingQrDataUrl,
+  createSpecialTrainingSavedQrDataUrl,
+  downloadSpecialTrainingQrPng
+} from "../special-training-output";
 
 const TEST_FIXTURE: MembershipInput = {
   name: "테스트회원 (실제 회원 아님)",
@@ -35,6 +51,10 @@ const TEST_FIXTURE: MembershipInput = {
 
 const BOOTSTRAP_FILENAME = "Samsungdang-DojoLog-trusted-key-bootstrap-v1.json";
 const CREDENTIAL_FILENAME = "Samsungdang-DojoLog-membership-test-credential-v1.json";
+const SPECIAL_TRAINING_FILENAME = "Samsungdang-DojoLog-special-training-test-credential-v1.json";
+const SPECIAL_TRAINING_QR_FILENAME = "Samsungdang-DojoLog-special-training-test-credential-v1-QR.png";
+const TEST_SPECIAL_TITLE = "Phase 4J 테스트 특별수련";
+const TEST_SPECIAL_INSTRUCTOR = "테스트 지도자";
 type PromotionKind = "advance-one" | "target" | "recognized-at-entry";
 
 export default function CredentialIssuerPage() {
@@ -65,6 +85,18 @@ export default function CredentialIssuerPage() {
   const [promotionToken, setPromotionToken] = useState("");
   const [promotionDiagnostics, setPromotionDiagnostics] = useState<Record<string, unknown> | null>(null);
   const [promotionVerified, setPromotionVerified] = useState<boolean | null>(null);
+  const [specialEventId, setSpecialEventId] = useState("");
+  const [specialTitle, setSpecialTitle] = useState(TEST_SPECIAL_TITLE);
+  const [specialCategory, setSpecialCategory] = useState<SpecialTrainingCategory>("special-training");
+  const [specialStartDate, setSpecialStartDate] = useState("2026-10-24");
+  const [specialEndDate, setSpecialEndDate] = useState("");
+  const [specialInstructor, setSpecialInstructor] = useState(TEST_SPECIAL_INSTRUCTOR);
+  const [specialCredential, setSpecialCredential] = useState<SpecialTrainingCredential | null>(null);
+  const [specialJson, setSpecialJson] = useState("");
+  const [specialToken, setSpecialToken] = useState("");
+  const [specialQrDataUrl, setSpecialQrDataUrl] = useState("");
+  const [specialDiagnostics, setSpecialDiagnostics] = useState<Record<string, unknown> | null>(null);
+  const [specialVerified, setSpecialVerified] = useState<boolean | null>(null);
 
   const errors = useMemo(() => membershipInputErrors(input), [input]);
   const exactFixture = input.name === TEST_FIXTURE.name
@@ -97,6 +129,31 @@ export default function CredentialIssuerPage() {
     : promotionKind === "target"
       ? "Samsungdang-DojoLog-promotion-target-test-credential-v1.json"
       : "Samsungdang-DojoLog-promotion-recognized-at-entry-test-credential-v1.json";
+  const specialPayload = useMemo<SpecialTrainingPayload>(() => ({
+    eventId: specialEventId,
+    title: specialTitle,
+    category: specialCategory,
+    startDate: specialStartDate,
+    endDate: specialEndDate || null,
+    instructor: specialInstructor
+  }), [specialCategory, specialEndDate, specialEventId, specialInstructor, specialStartDate, specialTitle]);
+  const specialErrors = useMemo(() => specialTrainingInputErrors(specialPayload), [specialPayload]);
+  const exactSpecialTestFixture = specialTitle === TEST_SPECIAL_TITLE
+    && specialInstructor === TEST_SPECIAL_INSTRUCTOR;
+
+  function clearSpecialOutput() {
+    setSpecialCredential(null);
+    setSpecialJson("");
+    setSpecialToken("");
+    setSpecialQrDataUrl("");
+    setSpecialDiagnostics(null);
+    setSpecialVerified(null);
+  }
+
+  function newSpecialEventId() {
+    clearSpecialOutput();
+    setSpecialEventId(generateSpecialTrainingEventId());
+  }
 
   async function provision() {
     setBusy(true);
@@ -185,6 +242,71 @@ export default function CredentialIssuerPage() {
     }
   }
 
+  async function issueSpecialTrainingFixture() {
+    if (specialErrors.length || !exactSpecialTestFixture) return;
+    setBusy(true);
+    setSpecialVerified(null);
+    setMessage("test-only 특별수련 Credential을 생성하고 있습니다.");
+    try {
+      const eventIdBeforeIssuance = specialPayload.eventId;
+      const previousCredentialId = specialCredential?.signed.credentialId;
+      const result = await issueNativeSpecialTrainingCredential(specialPayload);
+      if (result.status !== "success" || !result.json || !result.bootstrap) {
+        throw new Error(result.message ?? "special-training credential issuance failed");
+      }
+      const parsedCredential = parseSpecialTrainingCredential(result.json);
+      const parsedBootstrap = parseTrustedKeyBootstrap(result.bootstrap);
+      const expectedToken = createCredentialTransportToken(parsedCredential);
+      if (result.transportToken !== expectedToken) throw new Error("native transport token mismatch");
+      if (parsedCredential.signed.payload.eventId !== eventIdBeforeIssuance) {
+        throw new Error("special-training eventId changed during issuance");
+      }
+      if (previousCredentialId && parsedCredential.signed.credentialId === previousCredentialId) {
+        throw new Error("credentialId was unexpectedly reused");
+      }
+      const verified = await verifySpecialTrainingCredential(parsedCredential, parsedBootstrap);
+      if (!verified) throw new Error("특별수련 Credential 공개키 self-verification에 실패했습니다.");
+      const productionLink = createSpecialTrainingProductionLink(parsedCredential);
+      const parsedLink = new URL(productionLink);
+      if (parsedLink.searchParams.get("credential") !== expectedToken) {
+        throw new Error("production link credential token mismatch");
+      }
+      const qrDataUrl = await createSpecialTrainingQrDataUrl(productionLink);
+      setSpecialCredential(parsedCredential);
+      setSpecialJson(result.json);
+      setSpecialToken(expectedToken);
+      setSpecialQrDataUrl(qrDataUrl);
+      setSpecialDiagnostics(result.diagnostics ? JSON.parse(result.diagnostics) : null);
+      setBootstrap(parsedBootstrap);
+      setBootstrapJson(result.bootstrap);
+      setSpecialVerified(true);
+      setMessage("test-only 특별수련 Credential 생성·검증과 QR 출력을 완료했습니다.");
+    } catch (error) {
+      clearSpecialOutput();
+      setSpecialVerified(false);
+      setMessage(error instanceof Error ? error.message : "특별수련 Credential 생성에 실패했습니다.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveSpecialTrainingQr() {
+    if (!specialQrDataUrl || !specialCredential) return;
+    try {
+      const productionLink = createSpecialTrainingProductionLink(specialCredential);
+      const savedQrDataUrl = await createSpecialTrainingSavedQrDataUrl(specialQrDataUrl, productionLink);
+      const status = await savePngImage(savedQrDataUrl, SPECIAL_TRAINING_QR_FILENAME);
+      if (status === "saved") {
+        setMessage(`${SPECIAL_TRAINING_QR_FILENAME} 파일을 저장했습니다.`);
+      } else if (status === "unavailable") {
+        downloadSpecialTrainingQrPng(savedQrDataUrl, SPECIAL_TRAINING_QR_FILENAME);
+        setMessage(`${SPECIAL_TRAINING_QR_FILENAME} 저장을 시작했습니다.`);
+      }
+    } catch {
+      setMessage("특별수련 QR PNG를 저장하지 못했습니다.");
+    }
+  }
+
   async function exportJson(filename: string, json: string) {
     if (!json) return;
     const result = await saveBackupFile(filename, `${JSON.stringify(JSON.parse(json), null, 2)}\n`);
@@ -194,9 +316,9 @@ export default function CredentialIssuerPage() {
   return (
     <main className="credential-shell">
       <header className="credential-header">
-        <span className="eyebrow">Phase 4I-A · development only</span>
+        <span className="eyebrow">Phase 4J-A · development only</span>
         <h1>Credential v1 발급 기반</h1>
-        <p>기존 Membership 회귀검증과 test-only Promotion Credential 발급을 위한 개발 화면입니다.</p>
+        <p>기존 Membership·Promotion 회귀검증과 test-only 특별수련 Credential 발급을 위한 개발 화면입니다.</p>
         <a href="/">지도자용 앱으로 돌아가기</a>
       </header>
 
@@ -269,6 +391,36 @@ export default function CredentialIssuerPage() {
         </button>
       </section>
 
+      <section className="panel credential-section">
+        <div className="credential-section-title"><QrCode /><div><span>4</span><h2>Special-training issuer test fixture</h2></div></div>
+        <p>eventId는 이 화면을 유지한 재발급에서 그대로 사용되며 credentialId만 새로 생성됩니다.</p>
+        <div className="credential-form credential-form-special">
+          <label><span>eventId</span><input value={specialEventId} readOnly /></label>
+          <label><span>행사명</span><input value={specialTitle} onChange={event => { clearSpecialOutput(); setSpecialTitle(event.target.value); }} /></label>
+          <label><span>category</span><select value={specialCategory} onChange={event => { clearSpecialOutput(); setSpecialCategory(event.target.value as SpecialTrainingCategory); }}>
+            <option value="seminar">seminar</option>
+            <option value="workshop">workshop</option>
+            <option value="special-training">special-training</option>
+            <option value="camp">camp</option>
+            <option value="other">other</option>
+          </select></label>
+          <label><span>시작일</span><input type="date" value={specialStartDate} onChange={event => { clearSpecialOutput(); setSpecialStartDate(event.target.value); }} /></label>
+          <label><span>종료일 (단일일이면 비움)</span><input type="date" value={specialEndDate} onChange={event => { clearSpecialOutput(); setSpecialEndDate(event.target.value); }} /></label>
+          <label><span>지도자</span><input value={specialInstructor} onChange={event => { clearSpecialOutput(); setSpecialInstructor(event.target.value); }} /></label>
+        </div>
+        <button className="ghost full" type="button" disabled={busy} onClick={newSpecialEventId}>
+          <RefreshCw />새 test eventId 생성
+        </button>
+        {specialErrors.map(error => <p className="credential-error" key={error}>{error}</p>)}
+        {!exactSpecialTestFixture && <p className="credential-error">Phase 4J-A에서는 고정 test-only 행사명과 지도자만 서명할 수 있습니다.</p>}
+        <button className="primary large" type="button" disabled={!nativeAvailable || busy || specialErrors.length > 0 || !exactSpecialTestFixture} onClick={issueSpecialTrainingFixture}>
+          test-only Special-training Credential 생성
+        </button>
+        <button className="credential-production-disabled" type="button" disabled>
+          실제 운영용 특별수련 Credential 발급 — actual E2E 완료 전 비활성
+        </button>
+      </section>
+
       <section className="panel credential-section" aria-live="polite">
         <h2>검증 결과</h2>
         <p className={selfVerified === false ? "credential-error" : "credential-status"}>{message}</p>
@@ -305,6 +457,30 @@ export default function CredentialIssuerPage() {
         {promotionVerified === false && <p className="credential-error">Promotion Credential 검증에 실패했습니다.</p>}
         <button className="ghost full" type="button" disabled={!promotionJson || busy} onClick={() => exportJson(promotionFilename, promotionJson)}>
           <FileDown />현재 Promotion Credential v1 저장
+        </button>
+      </section>
+
+      <section className="panel credential-section" aria-live="polite">
+        <h2>Special-training 검증·전달 결과</h2>
+        {specialCredential && <dl className="credential-diagnostics">
+          <div><dt>eventId</dt><dd>{specialCredential.signed.payload.eventId}</dd></div>
+          <div><dt>credentialId</dt><dd>{specialCredential.signed.credentialId}</dd></div>
+          <div><dt>keyId</dt><dd>{specialCredential.signed.keyId}</dd></div>
+          <div><dt>issuedAt</dt><dd>{specialCredential.signed.issuedAt}</dd></div>
+          <div><dt>signature</dt><dd>64-byte r||s · unpadded base64url</dd></div>
+          <div><dt>self verify</dt><dd>{specialVerified ? "PASS" : "미검증"}</dd></div>
+          <div><dt>transport token</dt><dd>{specialToken.length} characters</dd></div>
+        </dl>}
+        {specialDiagnostics && <pre className="credential-preview">{JSON.stringify(specialDiagnostics, null, 2)}</pre>}
+        {specialJson && <pre className="credential-preview">{JSON.stringify(specialCredential, null, 2)}</pre>}
+        {specialQrDataUrl && <div className="credential-qr-output">
+          <img src={specialQrDataUrl} alt="Special-training production HTTPS link QR" />
+          <p>QR에는 production HTTPS transport URL이 들어 있습니다. URL 자체는 화면에 표시하거나 복사·직접 공유하지 않습니다.</p>
+          <button className="ghost full" type="button" onClick={saveSpecialTrainingQr}><Download />QR PNG 저장</button>
+        </div>}
+        {specialVerified === false && <p className="credential-error">Special-training Credential 검증에 실패했습니다.</p>}
+        <button className="ghost full" type="button" disabled={!specialJson || busy} onClick={() => exportJson(SPECIAL_TRAINING_FILENAME, specialJson)}>
+          <FileDown />현재 Special-training Credential v1 저장
         </button>
       </section>
     </main>

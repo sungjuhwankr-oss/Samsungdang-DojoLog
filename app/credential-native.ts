@@ -1,5 +1,5 @@
 export type NativeCredentialResult = {
-  operation: "provision-key" | "issue-membership" | "issue-promotion";
+  operation: "provision-key" | "issue-membership" | "issue-promotion" | "issue-special-training";
   status: "success" | "error";
   json?: string;
   bootstrap?: string;
@@ -12,6 +12,7 @@ type NativeCredentialBridge = {
   provisionProductionKey: () => void;
   issueMembershipCredential: (name: string, memberId: string, joinedAt: string) => void;
   issuePromotionCredential: (payloadJson: string) => void;
+  issueSpecialTrainingCredential: (payloadJson: string) => void;
 };
 
 type CredentialWindow = Window & { SamsungdangCredentialBridge?: NativeCredentialBridge };
@@ -23,7 +24,8 @@ function bridge(): NativeCredentialBridge | undefined {
 export function hasNativeCredentialBridge(): boolean {
   return typeof bridge()?.provisionProductionKey === "function"
     && typeof bridge()?.issueMembershipCredential === "function"
-    && typeof bridge()?.issuePromotionCredential === "function";
+    && typeof bridge()?.issuePromotionCredential === "function"
+    && typeof bridge()?.issueSpecialTrainingCredential === "function";
 }
 
 function nativeResult(
@@ -69,4 +71,11 @@ export function issueNativeMembershipCredential(
 
 export function issueNativePromotionCredential(payload: object): Promise<NativeCredentialResult> {
   return nativeResult("issue-promotion", native => native.issuePromotionCredential(JSON.stringify(payload)));
+}
+
+export function issueNativeSpecialTrainingCredential(payload: object): Promise<NativeCredentialResult> {
+  return nativeResult(
+    "issue-special-training",
+    native => native.issueSpecialTrainingCredential(JSON.stringify(payload))
+  );
 }

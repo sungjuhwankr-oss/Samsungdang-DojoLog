@@ -91,6 +91,21 @@ public final class CredentialIssuerBridge {
         });
     }
 
+    @JavascriptInterface
+    public void issueSpecialTrainingCredential(final String payloadJson) {
+        run("issue-special-training", new Operation() {
+            @Override public Result execute() throws Exception {
+                final SpecialTrainingRequest request = SpecialTrainingRequest.parse(payloadJson);
+                return signCredential("special-training", new SignedFactory() {
+                    @Override public String create(
+                            String credentialId, String keyId, String issuedAt) {
+                        return request.canonicalSigned(credentialId, keyId, issuedAt);
+                    }
+                });
+            }
+        });
+    }
+
     private Result signCredential(String credentialType, SignedFactory factory) throws Exception {
         KeyMaterial material = loadOrCreateActiveKey();
         byte[] randomBytes = new byte[16];
@@ -296,6 +311,81 @@ public final class CredentialIssuerBridge {
 
         String bootstrapJson() {
             return bootstrap;
+        }
+    }
+
+    private static final class SpecialTrainingRequest {
+        final String eventId;
+        final String title;
+        final String category;
+        final String startDate;
+        final String endDate;
+        final String instructor;
+
+        SpecialTrainingRequest(
+                String eventId,
+                String title,
+                String category,
+                String startDate,
+                String endDate,
+                String instructor) {
+            this.eventId = eventId;
+            this.title = title;
+            this.category = category;
+            this.startDate = startDate;
+            this.endDate = endDate;
+            this.instructor = instructor;
+        }
+
+        static SpecialTrainingRequest parse(String json) throws Exception {
+            if (json == null || json.length() == 0) {
+                throw new IllegalArgumentException("special-training payload is required");
+            }
+            JSONObject payload = new JSONObject(json);
+            requireExactKeys(payload, "eventId", "title", "category", "startDate",
+                    "endDate", "instructor");
+            String eventId = requireString(payload, "eventId");
+            String title = requireString(payload, "title");
+            String category = requireString(payload, "category");
+            String startDate = requireString(payload, "startDate");
+            Object endDateValue = payload.get("endDate");
+            String endDate;
+            if (endDateValue == JSONObject.NULL) {
+                endDate = null;
+            } else if (endDateValue instanceof String) {
+                endDate = (String) endDateValue;
+            } else {
+                throw new IllegalArgumentException("endDate must be a string or null");
+            }
+            String instructor = requireString(payload, "instructor");
+            CredentialV1.validateSpecialTraining(
+                    eventId, title, category, startDate, endDate, instructor);
+            return new SpecialTrainingRequest(
+                    eventId, title, category, startDate, endDate, instructor);
+        }
+
+        String canonicalSigned(String credentialId, String keyId, String issuedAt) {
+            return CredentialV1.canonicalSpecialTrainingSigned(
+                    credentialId, keyId, issuedAt, eventId, title, category,
+                    startDate, endDate, instructor);
+        }
+
+        private static String requireString(JSONObject object, String key) throws Exception {
+            Object value = object.get(key);
+            if (!(value instanceof String)) {
+                throw new IllegalArgumentException(key + " must be a string");
+            }
+            return (String) value;
+        }
+
+        private static void requireExactKeys(JSONObject object, String... expected) {
+            Set<String> keys = new HashSet<String>();
+            Iterator<String> iterator = object.keys();
+            while (iterator.hasNext()) keys.add(iterator.next());
+            Set<String> expectedKeys = new HashSet<String>(Arrays.asList(expected));
+            if (!keys.equals(expectedKeys)) {
+                throw new IllegalArgumentException("special-training payload fields are invalid");
+            }
         }
     }
 

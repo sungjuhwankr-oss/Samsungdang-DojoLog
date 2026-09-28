@@ -2,9 +2,10 @@ export type NativeShareStatus = "shared" | "unavailable";
 
 type SessionShareBridge = {
   shareSession?: (text: string, pngBase64: string, filename: string) => void;
+  savePng?: (pngBase64: string, filename: string) => void;
 };
 
-export type ShareHost = Pick<Window, "addEventListener" | "removeEventListener"> & { SamsungdangBackupBridge?: SessionShareBridge };
+export type ShareHost = Pick<Window, "addEventListener" | "removeEventListener" | "dispatchEvent"> & { SamsungdangBackupBridge?: SessionShareBridge };
 
 export function hasNativeSessionShare(host: ShareHost = window as ShareHost): boolean {
   return typeof host.SamsungdangBackupBridge?.shareSession === "function";
@@ -27,6 +28,29 @@ export function shareSessionCard(text: string, pngDataUrl: string, filename: str
       share.call(host.SamsungdangBackupBridge, text, pngDataUrl.slice(comma + 1), filename);
     } catch (error) {
       host.removeEventListener("samsungdang-share-result", handler);
+      reject(error);
+    }
+  });
+}
+
+export function savePngImage(pngDataUrl: string, filename: string, host: ShareHost = window as ShareHost): Promise<"saved" | "cancelled" | "unavailable"> {
+  const save = host.SamsungdangBackupBridge?.savePng;
+  if (typeof save !== "function") return Promise.resolve("unavailable");
+  const comma = pngDataUrl.indexOf(",");
+  if (!pngDataUrl.startsWith("data:image/png;base64,") || comma < 0) throw new Error("PNG 이미지 형식이 올바르지 않습니다.");
+  return new Promise((resolve, reject) => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ status?: string }>).detail;
+      host.removeEventListener("samsungdang-image-save-result", handler);
+      if (detail?.status === "success") resolve("saved");
+      else if (detail?.status === "cancel") resolve("cancelled");
+      else reject(new Error("Android PNG 저장 화면을 열지 못했습니다."));
+    };
+    host.addEventListener("samsungdang-image-save-result", handler, { once: true });
+    try {
+      save.call(host.SamsungdangBackupBridge, pngDataUrl.slice(comma + 1), filename);
+    } catch (error) {
+      host.removeEventListener("samsungdang-image-save-result", handler);
       reject(error);
     }
   });
