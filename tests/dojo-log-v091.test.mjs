@@ -45,7 +45,7 @@ test("preserves custom kata in the edit select", () => {
   assert.match(page, /<KataOptions current=\{kata\}\/>/);
 });
 
-test("uses shared, state-preserving omote and ura video actions", () => {
+test("uses shared, state-preserving omote and ura video actions", async () => {
   const expected = ["1교","2교","3교","4교","5교","입신던지기","사방던지기","손목뒤집기","천지던지기","회전던지기","호흡던지기","입기 호흡법","십자던지기"];
   for (let index = 1; index < expected.length; index += 1) {
     assert.ok(recommendation.indexOf(`"${expected[index - 1]}"`) < recommendation.indexOf(`"${expected[index]}"`));
@@ -56,11 +56,11 @@ test("uses shared, state-preserving omote and ura video actions", () => {
   assert.ok((page.match(/<VideoButtons kata=/g) ?? []).length >= 2);
   assert.match(page, /function openVideo\(url:string\)/);
   assert.match(page, /sessionStorage\.setItem\(VIEW_KEY/);
-  assert.match(page, /\{tab,query,selectedCategory,examGrade,scrollY:window\.scrollY,planner:/);
+  assert.match(page, /\{tab,query,selectedCategory,examGrade,journalMode,memoQuery,expandedId,scrollY:window\.scrollY,planner:/);
   assert.match(page, /launchVideoUrl\(window as unknown as VideoNavigationHost,url\)/);
   assert.match(page, /lastVideoOpenRef/);
   assert.match(page, /onClick=\{\(\)=>onOpen\(action\.url\)\}/);
-  assert.doesNotMatch(page, /영상 없음/);
+  assert.match(await readFile(new URL("../app/journal-view.tsx",import.meta.url),"utf8"), /영상 없음/);
 });
 
 test("stores session-only completion explicitly and uses session-ordered detailed recency", () => {
@@ -90,7 +90,7 @@ test("anchors delete confirmation to the selected trash button", () => {
 });
 
 test("regenerates balanced alternatives without changing the established score formula", () => {
-  assert.match(recommendation, /base:30\+\(k\.exam\?20:0\)\+\(grade===focusGrade\?16:0\)\+\(k\.form!=="입기"\?14:0\)-recentNames\.filter\(name=>name===k\.name\)\.length\*18\+\(k\.links\.length\?2:0\)/);
+  assert.match(recommendation, /base:30\+\(k\.exam\?20:0\)\+\(grade===focusGrade\?16:0\)\+\(k\.form!=="입기"\?14:0\)-recentNames\.filter\(name=>name===k\.name\)\.length\*18\+\(recommendationHasVideo\(k\)\?2:0\)/);
   assert.match(recommendation, /Recommendation-only compatibility shim/);
   assert.match(recommendation, /"맞서한손잡기 입신던지기":6/);
   assert.match(recommendation, /"엇서한손잡기 사방던지기":5/);
@@ -200,8 +200,8 @@ test("places the manual dan condition with participant grades and keeps two spec
   assert.doesNotMatch(recommendation, /Math\.random/);
 });
 
-test("resets only the four reference views to the window top on every activation", () => {
-  assert.match(page, /SCROLL_RESET_TABS:Tab\[\]=\["logs","hombu","exam","help"\]/);
+test("resets the journal and reference views to the window top on every activation", () => {
+  assert.match(page, /SCROLL_RESET_TABS:Tab\[\]=\["logs","hombu","exam","beginner","help"\]/);
   assert.match(page, /useEffect\(\(\)=>\{if\(SCROLL_RESET_TABS\.includes\(tab\)\)window\.scrollTo\(0,0\)\},\[tab\]\)/);
   assert.match(page, /SCROLL_RESET_TABS\.includes\(saved\.tab\)\?0:Number\(saved\.scrollY\)\|\|0/);
   assert.doesNotMatch(page, /SCROLL_RESET_TABS:Tab\[\]=\[[^\]]*"today"/);
@@ -337,7 +337,7 @@ test("removes journal video counts while preserving kata link data consumers", (
   assert.doesNotMatch(journal, /k\.links\.length/);
   assert.doesNotMatch(journal, /영상 \{k\.links\.length\}/);
   assert.match(page, /function VideoButtons/);
-  assert.match(page, /bandText\(log\.date,log\.session,log\.katas\)/);
+  assert.match(page, /bandText\(log\.date,log\.session,log\.katas\.map\(currentKataPresentation\)\)/);
   assert.match(page, /serializeBackup\(currentState\(\),APP_VERSION\)/);
 });
 

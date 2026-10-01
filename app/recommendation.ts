@@ -1,4 +1,4 @@
-import {EXAM_GROUPS,KATAS,highestNumericGrade,type Grade,type Kata,type NumericGrade} from "./data";
+import {EXAM_GROUPS,RECOMMENDATION_KATAS as KATAS,recommendationHasVideo,highestNumericGrade,type Grade,type Kata,type NumericGrade} from "./data";
 
 export type GradeMode="highest"|"balanced";
 export type RecommendationLog={status:"완료"|"취소";recordType?:"detailed"|"sessionOnly";session?:number;katas:Kata[]};
@@ -83,7 +83,7 @@ export function recommend(grades:Grade[],count:number,logs:RecommendationLog[],a
   return(k.area==="일반 체술"||k.area==="호흡력")&&k.name!=="좌기 호흡법"&&k.name!=="엇서한손잡기 구석던지기"&&k.name!=="맞서한손잡기에서 바로 넣는 2교"&&k.hombu&&(ungradedOnly?ungradedLearningStage(k)!==null:(!grade||grade>=previewCeiling));
  }).map(k=>{
   const grade=ungradedOnly?k.grade:recommendationGrade(k);
-  return{k,base:30+(k.exam?20:0)+(grade===focusGrade?16:0)+(k.form!=="입기"?14:0)-recentNames.filter(name=>name===k.name).length*18+(k.links.length?2:0)+(ungradedOnly?(ungradedLearningStage(k)==="initial"?24:ungradedLearningStage(k)==="preview"?10:0):0)};
+  return{k,base:30+(k.exam?20:0)+(grade===focusGrade?16:0)+(k.form!=="입기"?14:0)-recentNames.filter(name=>name===k.name).length*18+(recommendationHasVideo(k)?2:0)+(ungradedOnly?(ungradedLearningStage(k)==="initial"?24:ungradedLearningStage(k)==="preview"?10:0):0)};
  });
  const baseSort=(a:{k:Kata;base:number},b:{k:Kata;base:number})=>b.base-a.base||Number(isRepresentative(b.k))-Number(isRepresentative(a.k))||techniqueOrder(a.k)-techniqueOrder(b.k)||a.k.name.localeCompare(b.k.name,"ko");
  candidates.sort(baseSort);

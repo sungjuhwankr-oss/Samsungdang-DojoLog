@@ -17,6 +17,7 @@ import {
 } from "../app/session-share";
 import { createQrDataUrl } from "../app/session-share-card";
 import { hasNativeSessionShare, savePngImage, shareSessionCard, type ShareHost } from "../app/session-share-file";
+import {AWASE_BUNDLES,expandPlan} from '../app/plan-units';
 
 const katas = KATAS.slice(0, 7);
 const log: DojoLog = {
@@ -62,7 +63,7 @@ test("serialization and import links are deterministic and UTF-8 safe", () => {
   const link = createImportLink(payload, baseUrl)!;
   assert.equal(link, createImportLink(payload, baseUrl));
   assert.deepEqual(decodeImportLink(link), payload);
-  assert.match(link, /^https:\/\/dojolog\.example\.test\/import#session=/);
+  assert.match(link, /^https:\/\/dojolog\.example\.test\/import\/#session=/);
 });
 
 test("creates practical links for five, seven, and long Korean kata names", () => {
@@ -87,25 +88,39 @@ test("QR encodes the exact import link", async () => {
   assert.equal(decoded?.data, link);
 });
 
-test("QR falls back to the same serialized payload when no public endpoint exists", () => {
-  const payload = createSessionSharePayload(log);
-  assert.equal(createImportLink(payload, ""), null);
-  assert.equal(createQrContent(payload, null), serializeSessionSharePayload(payload));
+test("seven slots plus two awase units use one production URL in text and decoded QR",async()=>{
+  const record={...log,katas:[...katas,...expandPlan(AWASE_BUNDLES)]};
+  const payload=createSessionSharePayload(record),importUrl=createImportLink(payload);
+  const text=createBandShareText(record,importUrl);
+  const dataUrl=await createQrDataUrl(createQrContent(payload,importUrl));
+  const png=PNG.sync.read(Buffer.from(dataUrl.split(',')[1],'base64'));
+  assert.equal(jsQR(new Uint8ClampedArray(png.data),png.width,png.height)?.data,importUrl);
+  assert.equal(text.split('\n').at(-1),importUrl);
+  assert.equal(payload.kata.length,22);
 });
 
-test("BAND share text prepends the import block without changing its existing body", () => {
+test("production endpoint is mandatory and QR preserves the one generated URL", () => {
+  const payload = createSessionSharePayload(log);
+  assert.throws(()=>createImportLink(payload,""));
+  const link=createImportLink(payload);
+  assert.match(link,/^https:\/\/sungjuhwankr-oss\.github\.io\/Samsungdang-DojoLog-Member\/import\/#session=/);
+  assert.equal(createQrContent(payload,link),link);
+});
+
+test("BAND share text appends the import block without changing its existing body", () => {
   const link = createImportLink(createSessionSharePayload(log), baseUrl)!;
   const text = createBandShareText(log, link);
   const original = bandText(log.date, log.session!, log.katas);
-  assert.ok(text.startsWith(`[회원용 DojoLog 수련기록 가져오기]\n\n▶ 링크로 가져오기\n${link}`));
-  assert.ok(text.endsWith(original));
-  assert.equal(text.slice(text.length - original.length), original);
+  assert.ok(text.startsWith(original));
+  assert.equal(text.slice(0,original.length),original);
+  assert.ok(text.endsWith(`[회원용 DojoLog 수련기록 가져오기]\n${link}`));
 });
 
-test("missing endpoint produces an honest notice rather than a fake URL", () => {
-  const text = createBandShareText(log, null);
-  assert.match(text, /회원용 앱 공개 링크 준비 중/);
-  assert.ok(text.endsWith(bandText(log.date, log.session!, log.katas)));
+test("production import path is not appended twice",()=>{
+ const payload=createSessionSharePayload(log);
+ const link=createImportLink(payload);
+ assert.equal(new URL(link).pathname,"/Samsungdang-DojoLog-Member/import/");
+ assert.deepEqual(decodeImportLink(link),payload);
 });
 
 test("native bridge absence is safe and native sharing passes text and PNG once", async () => {
@@ -145,6 +160,6 @@ test("payload and share helpers do not mutate the journal state", () => {
   const before = structuredClone(log);
   const payload = createSessionSharePayload(log);
   createImportLink(payload, baseUrl);
-  createBandShareText(log, null);
+  createBandShareText(log,createImportLink(payload));
   assert.deepEqual(log, before);
 });

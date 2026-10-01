@@ -1,7 +1,14 @@
+import catalog from "../reference/kata-catalog.v2.json";
+import baseline from "../reference/kata-catalog.v1.json";
+
+export type CategoryId="taijutsu"|"tanto"|"ken"|"jo"|"multi-other";
+export type ExamEntry={track:"kyu";grade:NumericGrade}|{track:"dan"};
+export const CATALOG_CATEGORIES: {id:CategoryId;label:string}[]=[{id:"taijutsu",label:"기본 체술"},{id:"tanto",label:"단도"},{id:"ken",label:"검"},{id:"jo",label:"장"},{id:"multi-other",label:"다인·기타"}];
+
 export type NumericGrade = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 export type Grade = NumericGrade | "ungraded";
 export type VideoLink = { label?: string; url: string };
-export type Kata = { id:string; name:string; form:"입기"|"좌기"|"반신반립"; attack:string; technique:string; grade?:NumericGrade; hombu:boolean; exam:boolean; area:"일반 체술"|"호흡력"|"다인 잡기"|"무기 잡기"; links:VideoLink[] };
+export type Kata = { id:string; name:string; form:"입기"|"좌기"|"반신반립"; attack:string; technique:string; grade?:NumericGrade; hombu:boolean; exam:boolean; area:"일반 체술"|"호흡력"|"다인 잡기"|"무기 잡기"; links:VideoLink[]; categoryId?:CategoryId; examEntries?:ExamEntry[] };
 
 export const GRADES:NumericGrade[]=[9,8,7,6,5,4,3,2,1];
 export const PARTICIPANT_GRADES:Grade[]=["ungraded",...GRADES];
@@ -22,119 +29,26 @@ export const EXAM_GROUPS: Record<NumericGrade,{sessions:number;focus:string;basi
   1:{sessions:40,focus:"허리던지기·합기떨어뜨리기·십자던지기",kata:["뒤양손잡기 허리던지기","양손잡기 허리던지기","양어깨잡기 합기떨어뜨리기","뒤양손잡기 합기떨어뜨리기","한손양손잡기 십자던지기","뒤양손잡기 십자던지기","뒤양어깨잡기 십자던지기"]}
 };
 
-const VIDEO_TEXT=`
-좌기 호흡법|https://youtu.be/HmTnMlx5GrA?t=1362
-한손양손잡기 호흡법|오모테|https://youtu.be/HmTnMlx5GrA?t=1390
-한손양손잡기 호흡법|우라|https://youtu.be/HmTnMlx5GrA?t=1429
-맞서한손잡기 1교|오모테|https://youtu.be/HmTnMlx5GrA?t=1151
-맞서한손잡기 1교|우라|https://youtu.be/HmTnMlx5GrA?t=1201
-정면타 1교|오모테|https://youtu.be/HmTnMlx5GrA?t=1250
-정면타 1교|우라|https://youtu.be/HmTnMlx5GrA?t=1285
-좌기 정면타 1교|오모테|https://youtu.be/u_7Mgi_VnaE?t=132
-좌기 정면타 1교|우라|https://youtu.be/u_7Mgi_VnaE?t=195
-횡면타 1교|오모테|https://youtu.be/u_7Mgi_VnaE?t=258
-횡면타 1교|우라|https://youtu.be/u_7Mgi_VnaE?t=324
-어깨잡기 1교|오모테|https://youtu.be/u_7Mgi_VnaE?t=386
-어깨잡기 1교|우라|https://youtu.be/u_7Mgi_VnaE?t=456
-뒤양손잡기 1교|오모테|https://youtu.be/u_7Mgi_VnaE?t=510
-뒤양손잡기 1교|우라|https://youtu.be/u_7Mgi_VnaE?t=590
-좌기 정면타 2교|오모테|https://youtu.be/u_7Mgi_VnaE?t=694
-좌기 정면타 2교|우라|https://youtu.be/u_7Mgi_VnaE?t=756
-엇서한손잡기 2교|오모테|https://youtu.be/u_7Mgi_VnaE?t=811
-엇서한손잡기 2교|우라|https://youtu.be/u_7Mgi_VnaE?t=896
-어깨잡기 2교|오모테|https://youtu.be/u_7Mgi_VnaE?t=966
-어깨잡기 2교|우라|https://youtu.be/u_7Mgi_VnaE?t=1026
-한손양손잡기 2교|오모테|https://youtu.be/u_7Mgi_VnaE?t=1096
-한손양손잡기 2교|우라|https://youtu.be/u_7Mgi_VnaE?t=1186
-맞서한손잡기에서 바로 넣는 2교|https://youtu.be/u_7Mgi_VnaE?t=1247
-정면타 3교|오모테|https://youtu.be/XJIeNPFzw2Y?t=115
-정면타 3교|우라|https://youtu.be/XJIeNPFzw2Y?t=205
-엇서한손잡기 3교|오모테|https://youtu.be/XJIeNPFzw2Y?t=270
-엇서한손잡기 3교|우라|https://youtu.be/XJIeNPFzw2Y?t=340
-횡면타 3교|오모테|https://youtu.be/XJIeNPFzw2Y?t=400
-횡면타 3교|우라|https://youtu.be/XJIeNPFzw2Y?t=473
-뒤양손잡기 3교|오모테|https://youtu.be/XJIeNPFzw2Y?t=548
-뒤양손잡기 3교|우라|https://youtu.be/XJIeNPFzw2Y?t=618
-좌기 정면타 4교|오모테|https://youtu.be/XJIeNPFzw2Y?t=748
-좌기 정면타 4교|우라|https://youtu.be/XJIeNPFzw2Y?t=823
-횡면타 4교|오모테|https://youtu.be/XJIeNPFzw2Y?t=878
-횡면타 4교|우라|https://youtu.be/XJIeNPFzw2Y?t=933
-어깨잡기 4교|오모테|https://youtu.be/XJIeNPFzw2Y?t=983
-어깨잡기 4교|우라|https://youtu.be/XJIeNPFzw2Y?t=1033
-양손잡기 4교|오모테|https://youtu.be/XJIeNPFzw2Y?t=1088
-양손잡기 4교|우라|https://youtu.be/XJIeNPFzw2Y?t=1133
-뒤양손잡기 4교|오모테|https://youtu.be/XJIeNPFzw2Y?t=1183
-뒤양손잡기 4교|우라|https://youtu.be/XJIeNPFzw2Y?t=1240
-좌기 정면타 5교|오모테|https://youtu.be/XJIeNPFzw2Y?t=1351
-좌기 정면타 5교|우라|https://youtu.be/XJIeNPFzw2Y?t=1424
-횡면타 5교|오모테|https://youtu.be/XJIeNPFzw2Y?t=1478
-횡면타 5교|우라|https://youtu.be/XJIeNPFzw2Y?t=1528
-정면타 입신던지기|https://youtu.be/19vFET0GM1g?t=116
-횡면타 입신던지기|https://youtu.be/19vFET0GM1g?t=187
-맞서한손잡기 입신던지기|https://youtu.be/19vFET0GM1g?t=277
-엇서한손잡기 입신던지기|https://youtu.be/19vFET0GM1g?t=348
-양손잡기 입신던지기|https://youtu.be/19vFET0GM1g?t=422
-한손양손잡기 입신던지기|https://youtu.be/19vFET0GM1g?t=488
-찌르기 입신던지기|https://youtu.be/19vFET0GM1g?t=558
-뒤양손잡기 입신던지기|https://youtu.be/19vFET0GM1g?t=628
-엇서한손잡기 사방던지기|오모테|https://youtu.be/HmTnMlx5GrA?t=1041
-엇서한손잡기 사방던지기|우라|https://youtu.be/HmTnMlx5GrA?t=1111
-횡면타 사방던지기|오모테|https://youtu.be/19vFET0GM1g?t=768
-횡면타 사방던지기|우라|https://youtu.be/19vFET0GM1g?t=833
-반신반립 엇서한손잡기 사방던지기|오모테|https://youtu.be/19vFET0GM1g?t=903
-반신반립 엇서한손잡기 사방던지기|우라|https://youtu.be/19vFET0GM1g?t=983
-반신반립 양손잡기 사방던지기|오모테|https://youtu.be/19vFET0GM1g?t=1033
-반신반립 양손잡기 사방던지기|우라|https://youtu.be/19vFET0GM1g?t=1123
-양손잡기 사방던지기|오모테|https://youtu.be/19vFET0GM1g?t=1178
-양손잡기 사방던지기|우라|https://youtu.be/19vFET0GM1g?t=1243
-뒤양손잡기 사방던지기|오모테|https://youtu.be/19vFET0GM1g?t=1298
-뒤양손잡기 사방던지기|우라|https://youtu.be/19vFET0GM1g?t=1368
-찌르기 손목뒤집기|1|https://youtu.be/dQTPeYz_qXU?t=111
-찌르기 손목뒤집기|2|https://youtu.be/dQTPeYz_qXU?t=226
-엇서한손잡기 손목뒤집기|https://youtu.be/dQTPeYz_qXU?t=303
-정면타 손목뒤집기|https://youtu.be/dQTPeYz_qXU?t=408
-횡면타 손목뒤집기|https://youtu.be/dQTPeYz_qXU?t=503
-한손양손잡기 손목뒤집기|https://youtu.be/dQTPeYz_qXU?t=625
-뒤양손잡기 손목뒤집기|https://youtu.be/dQTPeYz_qXU?t=745
-엇서한손잡기 내회전던지기|https://youtu.be/dQTPeYz_qXU?t=885
-엇서한손잡기 외회전던지기|https://youtu.be/dQTPeYz_qXU?t=970
-정면타 외회전던지기|https://youtu.be/dQTPeYz_qXU?t=1085
-찌르기 외회전던지기|https://youtu.be/dQTPeYz_qXU?t=1190
-뒤양손잡기 내회전던지기|https://youtu.be/dQTPeYz_qXU?t=1270
-양손잡기 천지던지기|오모테|https://youtu.be/dQTPeYz_qXU?t=1400
-양손잡기 천지던지기|우라|https://youtu.be/dQTPeYz_qXU?t=1465
-양손잡기 허리던지기|1|https://youtu.be/K79c41m2SIQ?t=132
-양손잡기 허리던지기|2|https://youtu.be/K79c41m2SIQ?t=218
-뒤양손잡기 허리던지기|https://youtu.be/K79c41m2SIQ?t=285
-한손양손잡기 호흡던지기|https://youtu.be/K79c41m2SIQ?t=393
-횡면타 호흡던지기|https://youtu.be/K79c41m2SIQ?t=473
-뒤양손잡기 호흡던지기|https://youtu.be/K79c41m2SIQ?t=568
-한손양손잡기 십자던지기|https://youtu.be/K79c41m2SIQ?t=659
-뒤양손잡기 십자던지기|https://youtu.be/K79c41m2SIQ?t=760
-뒤양어깨잡기 십자던지기|https://youtu.be/K79c41m2SIQ?t=868
-양어깨잡기 합기떨어뜨리기|https://youtu.be/K79c41m2SIQ?t=916
-뒤양손잡기 합기떨어뜨리기|https://youtu.be/K79c41m2SIQ?t=1008
-2인 잡기 사방던지기|https://youtu.be/l0TaZJsXiIo?t=141
-2인 잡기 호흡던지기 1|https://youtu.be/l0TaZJsXiIo?t=226
-2인 잡기 호흡던지기 2|https://youtu.be/l0TaZJsXiIo?t=306
-단도 뺏기 좌기 정면타 5교|오모테|https://youtu.be/l0TaZJsXiIo?t=376
-단도 뺏기 좌기 정면타 5교|우라|https://youtu.be/l0TaZJsXiIo?t=493
-단도 뺏기 횡면타 5교|오모테|https://youtu.be/l0TaZJsXiIo?t=593
-단도 뺏기 횡면타 5교|우라|https://youtu.be/l0TaZJsXiIo?t=713
-단도 뺏기 찌르기 팔꿈치굳히기(6교)|https://youtu.be/l0TaZJsXiIo?t=819
-단도 뺏기 찌르기 손목뒤집기|https://youtu.be/l0TaZJsXiIo?t=909
-단도 뺏기 횡면타 사방던지기|https://youtu.be/l0TaZJsXiIo?t=989
-검 뺏기 손목뒤집기|https://youtu.be/l0TaZJsXiIo?t=1079
-검 뺏기 호흡던지기|https://youtu.be/l0TaZJsXiIo?t=1149
-장 뺏기 입신던지기|https://youtu.be/l0TaZJsXiIo?t=1219
-장 뺏기 호흡던지기|https://youtu.be/l0TaZJsXiIo?t=1274
-장 뺏기 사방던지기|https://youtu.be/l0TaZJsXiIo?t=1339`;
-
-const videoMap=new Map<string,VideoLink[]>();
-VIDEO_TEXT.trim().split("\n").forEach(line=>{const p=line.split("|");const name=p[0],label=p.length===3?p[1]:undefined,url=p[p.length-1];videoMap.set(name,[...(videoMap.get(name)??[]),{label,url}])});
-function techniqueOf(name:string){return ["팔꿈치굳히기(6교)","합기떨어뜨리기","외회전던지기","내회전던지기","입신던지기","사방던지기","손목뒤집기","천지던지기","허리던지기","호흡던지기","십자던지기","구석던지기","호흡법","5교","4교","3교","2교","1교"].find(v=>name.includes(v))??"기타"}
-function kataFrom(name:string,grade?:NumericGrade,exam=false,hombu=true):Kata{const core=name.replace(/^(2인 잡기|단도 뺏기|검 뺏기|장 뺏기) /,"");const form=core.startsWith("좌기 ")?"좌기":core.startsWith("반신반립 ")?"반신반립":"입기";const technique=techniqueOf(name);const clean=core.replace(/^(좌기|반신반립) /,"");const parsedAttack=clean.slice(0,Math.max(0,clean.lastIndexOf(` ${technique}`)))||clean,attack=name==="맞서한손잡기에서 바로 넣는 2교"?"맞서한손잡기":name.startsWith("2인 잡기 ")?"2인 잡기":parsedAttack;const area=name.startsWith("2인 잡기 ")?"다인 잡기":/^(단도 뺏기|검 뺏기|장 뺏기) /.test(name)?"무기 잡기":technique==="호흡법"?"호흡력":"일반 체술";return{id:name.replace(/\s/g,"-"),name,form,attack,technique,grade,hombu,exam,area,links:videoMap.get(name)??[]}}
-const examNames=new Set(Object.values(EXAM_GROUPS).flatMap(g=>g.kata));
-const examKatas=(Object.entries(EXAM_GROUPS) as [string,(typeof EXAM_GROUPS)[NumericGrade]][]).flatMap(([grade,g])=>g.kata.map(name=>kataFrom(name,Number(grade) as NumericGrade,true,true)));
-export const KATAS:Kata[]=[...examKatas,...[...videoMap.keys()].filter(name=>!examNames.has(name)).map(name=>kataFrom(name,undefined,false,name==="맞서한손잡기에서 바로 넣는 2교"||!name.startsWith("맞서한손잡기에서")))].filter((k,i,a)=>a.findIndex(x=>x.name===k.name)===i);
+// Legacy scalar fields adapt existing consumers; canonical exam truth is examEntries.
+export const KATAS:Kata[]=catalog.kata.map(item=>{
+ const examEntries=item.examEntries as ExamEntry[],kyu=examEntries.find(entry=>entry.track==="kyu");
+ return {id:item.id,name:item.nameKo,form:item.form as Kata["form"],attack:item.attack,technique:item.technique,
+  area:item.area as Kata["area"],hombu:item.hombu,exam:examEntries.length>0,grade:kyu?.grade,
+  categoryId:item.categoryId as CategoryId,examEntries,links:item.links};
+});
+const byId=new Map(KATAS.map(k=>[k.id,k]));
+export function currentKata(id:string){return byId.get(id)}
+export function examBadge(id:string):string|null{
+ const entries=currentKata(id)?.examEntries??[],kyu=entries.filter(e=>e.track==="kyu");
+ if(kyu.length>1)throw new Error("복수 급수 배정은 계약 확정이 필요합니다.");
+ return kyu.length?`${kyu[0].grade}급`:entries.some(e=>e.track==="dan")?"유단자용":null;
+}
+export function currentKataPresentation(snapshot:Kata):Kata{
+ const current=currentKata(snapshot.id);
+ return {...snapshot,grade:current?.grade,exam:current?.exam??false,examEntries:current?.examEntries??[],links:current?.links??[]};
+}
+// Preserve the Phase 4J pool/order and video scoring signal independently of V2 links.
+export const RECOMMENDATION_KATAS=baseline.kata.map(k=>byId.get(k.id)!);
+const baselineVideos=new Set(baseline.kata.filter(k=>k.links.length>0).map(k=>k.id));
+export function recommendationHasVideo(kata:Kata){return baselineVideos.has(kata.id)}
 export function bandText(date:string,session:number,katas:Kata[]){const d=new Date(`${date}T00:00:00`);const ds=`${String(d.getFullYear()).slice(2)}. ${d.getMonth()+1}. ${d.getDate()}.`;const entries=katas.map(k=>{if(!k.links.length)return`○ ${k.name}`;if(k.links.length===1&&!k.links[0].label)return`○ ${k.name} ${k.links[0].url}`;return`○ ${k.name}\n${k.links.map(l=>`(${l.label??"영상"}) ${l.url}`).join("\n")}`});return`【 #수업일지 】 ${ds}(${session}차)\n\n${entries.join("\n\n")}`}

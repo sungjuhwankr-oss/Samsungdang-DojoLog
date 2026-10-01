@@ -1,10 +1,10 @@
 import type { DojoLog } from "./backup";
-import { bandText } from "./data";
+import { bandText,currentKataPresentation } from "./data";
 
 export const SESSION_SHARE_SCHEMA = "samsungdang-dojolog-session" as const;
 export const SESSION_SHARE_VERSION = 1 as const;
 export const SESSION_SHARE_DOJO = "samsungdang" as const;
-export const IMPORT_BASE_URL = (process.env.NEXT_PUBLIC_SESSION_IMPORT_BASE_URL ?? "").trim();
+export const IMPORT_BASE_URL = "https://sungjuhwankr-oss.github.io/Samsungdang-DojoLog-Member/import/";
 
 export type SessionSharePayload = {
   schema: typeof SESSION_SHARE_SCHEMA;
@@ -49,11 +49,12 @@ function decodeBase64Url(value: string): string {
   return new TextDecoder().decode(bytes);
 }
 
-export function createImportLink(payload: SessionSharePayload, baseUrl = IMPORT_BASE_URL): string | null {
-  if (!baseUrl) return null;
+export function createImportLink(payload: SessionSharePayload, baseUrl = IMPORT_BASE_URL): string {
+  if (!baseUrl) throw new Error("가져오기 주소가 없습니다.");
   const url = new URL(baseUrl);
   if (url.protocol !== "https:") throw new Error("가져오기 주소는 HTTPS여야 합니다.");
-  url.pathname = `${url.pathname.replace(/\/$/, "")}/import`;
+  const path=url.pathname.replace(/\/$/, "");
+  url.pathname = path.endsWith("/import") ? `${path}/` : `${path}/import/`;
   url.search = "";
   url.hash = `session=${encodeBase64Url(serializeSessionSharePayload(payload))}`;
   return url.toString();
@@ -66,15 +67,17 @@ export function decodeImportLink(link: string): SessionSharePayload {
   return JSON.parse(decodeBase64Url(url.hash.slice(prefix.length))) as SessionSharePayload;
 }
 
-export function createQrContent(payload: SessionSharePayload, importLink: string | null): string {
-  return importLink ?? serializeSessionSharePayload(payload);
+export function createQrContent(_payload: SessionSharePayload, importLink: string): string {
+  if(!importLink)throw new Error("가져오기 주소가 없습니다.");
+  return importLink;
 }
 
-export function sessionShareIntro(importLink: string | null): string {
-  return `[회원용 DojoLog 수련기록 가져오기]\n\n▶ 링크로 가져오기\n${importLink ?? "회원용 앱 공개 링크 준비 중"}\n\n────────────────`;
+export function sessionShareIntro(importLink: string): string {
+  if(!importLink)throw new Error("가져오기 주소가 없습니다.");
+  return `[회원용 DojoLog 수련기록 가져오기]\n${importLink}`;
 }
 
-export function createBandShareText(log: DojoLog, importLink: string | null, existingBody?: string): string {
+export function createBandShareText(log: DojoLog, importLink: string, existingBody?: string): string {
   const payload = createSessionSharePayload(log);
-  return `${sessionShareIntro(importLink)}\n\n${existingBody ?? bandText(payload.date, payload.sessionNo, log.katas)}`;
+  return `${existingBody ?? bandText(payload.date,payload.sessionNo,log.katas.map(currentKataPresentation))}\n\n${sessionShareIntro(importLink)}`;
 }

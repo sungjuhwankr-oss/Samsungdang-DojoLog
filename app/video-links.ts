@@ -24,10 +24,10 @@ export function videoActions(links: VideoLink[]): VideoAction[] {
   const ura = valid.find((link) => link.label === "우라");
 
   if (omote || ura) {
-    return [
-      omote && { kind: "omote" as const, label: "영상(오모테)" as const, url: omote.url },
-      ura && { kind: "ura" as const, label: "영상(우라)" as const, url: ura.url },
-    ].filter((action): action is VideoAction => Boolean(action));
+    const actions:VideoAction[]=[];
+    if(omote)actions.push({kind:"omote",label:"영상(오모테)",url:omote.url});
+    if(ura)actions.push({kind:"ura",label:"영상(우라)",url:ura.url});
+    return actions;
   }
 
   const generic = valid.filter((link,index,items)=>items.findIndex(item=>item.url===link.url)===index);
@@ -40,7 +40,7 @@ export function videoActions(links: VideoLink[]): VideoAction[] {
 export function compositionVideoActions(links: VideoLink[]): CompositionVideoAction[] {
   return videoActions(links).map((action) => ({
     ...action,
-    label: action.kind === "omote" ? "오모테" : action.kind === "ura" ? "우라" : action.label,
+    label: action.kind === "omote" ? "오모테" : action.kind === "ura" ? "우라" : action.kind === "generic" ? "영상" : `영상 ${action.kind.slice(8)}` as `영상 ${number}`,
   }));
 }
 
