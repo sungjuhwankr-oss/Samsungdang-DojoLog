@@ -180,6 +180,14 @@ public final class CredentialCoreTest {
         verifier.update((special + " ").getBytes(StandardCharsets.UTF_8));
         require(!verifier.verify(specialDer), "special-training signed field tamper rejection");
 
+        String onboardingPayload = "{\"baselineAsOf\":\"2026-10-02\",\"currentRankEntryId\":\"or1_AAAAAAAAAAAAAAAAAAAAAA\",\"currentRankSessionBaseline\":0,\"kataBaselines\":[],\"membership\":{\"joinedAt\":\"2015-12-06\",\"memberId\":\"ASD-000\",\"name\":\"테스트\"},\"onboardingId\":\"on1_AAAAAAAAAAAAAAAAAAAAAA\",\"recognizedAt\":\"2026-10-02\",\"recognizedRanks\":[{\"entryId\":\"or1_AAAAAAAAAAAAAAAAAAAAAA\",\"rankDate\":null,\"rankType\":\"kyu\",\"rankValue\":8}],\"revision\":1,\"supersedesCredentialId\":null}";
+        String onboarding = CredentialV1.canonicalMemberOnboardingSigned(
+                credentialId, keyId, "2026-10-02T06:00:00Z", onboardingPayload);
+        require(onboarding.equals("{\"credentialId\":\"c1_AAECAwQFBgcICQoLDA0ODw\",\"credentialVersion\":1,\"issuedAt\":\"2026-10-02T06:00:00Z\",\"issuer\":\"aikido-samsungdang\",\"keyId\":\""
+                + keyId + "\",\"payload\":" + onboardingPayload
+                + ",\"schema\":\"samsungdang-dojolog-credential\",\"type\":\"member-onboarding\"}"),
+                "member-onboarding TS/Java JCS parity vector");
+
         expectFailure(() -> StrictEcdsaDer.toP256Raw(Arrays.copyOf(der, der.length + 1)), "trailing DER bytes");
         expectFailure(() -> StrictEcdsaDer.toP256Raw(new byte[]{0x30, 0x06, 0x02, 0x01, 0, 0x02, 0x01, 1}), "zero r");
         expectFailure(() -> StrictEcdsaDer.toP256Raw(new byte[]{0x30, 0x06, 0x02, 0x01, (byte) 0x80, 0x02, 0x01, 1}), "negative r");

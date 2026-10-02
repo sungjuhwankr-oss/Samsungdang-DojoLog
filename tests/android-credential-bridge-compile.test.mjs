@@ -52,8 +52,15 @@ public class JSONObject {
   public static final Object NULL = new Object();
   public JSONObject(String json) {}
   public Object get(String key) throws Exception { return null; }
+  public JSONObject getJSONObject(String key) throws Exception { return null; }
   public Iterator<String> keys() { return Collections.<String>emptyList().iterator(); }
   public static String quote(String value) { return value; }
+}
+`,
+  "org/json/JSONArray.java": `package org.json;
+public class JSONArray {
+  public int length() { return 0; }
+  public JSONObject getJSONObject(int index) throws Exception { return null; }
 }
 `
 };

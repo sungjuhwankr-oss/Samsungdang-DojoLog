@@ -42,6 +42,7 @@ import {
   createSpecialTrainingSavedQrDataUrl,
   downloadSpecialTrainingQrPng
 } from "../special-training-output";
+import { OnboardingIssuer } from "./onboarding-issuer";
 
 const TEST_FIXTURE: MembershipInput = {
   name: "테스트회원 (실제 회원 아님)",
@@ -483,6 +484,8 @@ export default function CredentialIssuerPage() {
           <FileDown />현재 Special-training Credential v1 저장
         </button>
       </section>
+
+      <OnboardingIssuer nativeAvailable={nativeAvailable} />
     </main>
   );
 }

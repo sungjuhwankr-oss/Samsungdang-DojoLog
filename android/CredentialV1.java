@@ -13,6 +13,7 @@ public final class CredentialV1 {
     public static final String TYPE_MEMBERSHIP = "membership";
     public static final String TYPE_PROMOTION = "promotion";
     public static final String TYPE_SPECIAL_TRAINING = "special-training";
+    public static final String TYPE_MEMBER_ONBOARDING = "member-onboarding";
     public static final String BOOTSTRAP_SCHEMA =
             "samsungdang-dojolog-trusted-key-bootstrap";
 
@@ -21,6 +22,9 @@ public final class CredentialV1 {
     private static final Pattern CREDENTIAL_ID = Pattern.compile("c1_[A-Za-z0-9_-]{22}");
     private static final Pattern SPECIAL_TRAINING_EVENT_ID =
             Pattern.compile("st1_[A-Za-z0-9_-]{22}");
+    private static final Pattern ONBOARDING_ID = Pattern.compile("on1_[A-Za-z0-9_-]{22}");
+    private static final Pattern ONBOARDING_ENTRY_ID = Pattern.compile("or1_[A-Za-z0-9_-]{22}");
+    private static final Pattern ONBOARDING_MEMBER_ID = Pattern.compile("ASD-[0-9]{3,}");
     private static final Pattern ISSUED_AT = Pattern.compile(
             "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z");
     private static final char[] BASE64_URL =
@@ -216,6 +220,51 @@ public final class CredentialV1 {
                 credentialId, keyId, issuedAt, TYPE_SPECIAL_TRAINING, payload);
     }
 
+    public static String canonicalMemberOnboardingSigned(
+            String credentialId,
+            String keyId,
+            String issuedAt,
+            String canonicalPayload) {
+        return canonicalSigned(
+                credentialId, keyId, issuedAt, TYPE_MEMBER_ONBOARDING, canonicalPayload);
+    }
+
+    public static void validateOnboardingIdentity(
+            String onboardingId, long revision, String supersedesCredentialId,
+            String recognizedAt, String baselineAsOf, String name,
+            String memberId, String joinedAt) {
+        if (onboardingId == null || !ONBOARDING_ID.matcher(onboardingId).matches()) {
+            throw new IllegalArgumentException("invalid onboardingId");
+        }
+        if (revision < 1 || revision > MAX_SAFE_INTEGER) {
+            throw new IllegalArgumentException("invalid revision");
+        }
+        if (revision == 1 ? supersedesCredentialId != null
+                : supersedesCredentialId == null
+                || !CREDENTIAL_ID.matcher(supersedesCredentialId).matches()) {
+            throw new IllegalArgumentException("invalid supersedesCredentialId");
+        }
+        requireCalendarDate(recognizedAt, "recognizedAt");
+        requireCalendarDate(baselineAsOf, "baselineAsOf");
+        if (baselineAsOf.compareTo(recognizedAt) < 0) {
+            throw new IllegalArgumentException("baselineAsOf must not be before recognizedAt");
+        }
+        validateRequiredText(name, "name");
+        if (memberId == null || !ONBOARDING_MEMBER_ID.matcher(memberId).matches()) {
+            throw new IllegalArgumentException("invalid canonical memberId");
+        }
+        requireCalendarDate(joinedAt, "joinedAt");
+    }
+
+    public static void validateOnboardingRank(
+            String entryId, String rankType, long rankValue, String rankDate) {
+        if (entryId == null || !ONBOARDING_ENTRY_ID.matcher(entryId).matches()) {
+            throw new IllegalArgumentException("invalid onboarding rank entryId");
+        }
+        validateRank(rankType, rankValue);
+        if (rankDate != null) requireCalendarDate(rankDate, "rankDate");
+    }
+
     private static String canonicalSigned(
             String credentialId,
             String keyId,
@@ -233,7 +282,8 @@ public final class CredentialV1 {
         }
         if (!TYPE_MEMBERSHIP.equals(type)
                 && !TYPE_PROMOTION.equals(type)
-                && !TYPE_SPECIAL_TRAINING.equals(type)) {
+                && !TYPE_SPECIAL_TRAINING.equals(type)
+                && !TYPE_MEMBER_ONBOARDING.equals(type)) {
             throw new IllegalArgumentException("unsupported credential type");
         }
         if (canonicalPayload == null || canonicalPayload.length() == 0) {

@@ -6,6 +6,7 @@ import android.security.keystore.KeyProperties;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.nio.charset.StandardCharsets;
@@ -100,6 +101,22 @@ public final class CredentialIssuerBridge {
                     @Override public String create(
                             String credentialId, String keyId, String issuedAt) {
                         return request.canonicalSigned(credentialId, keyId, issuedAt);
+                    }
+                });
+            }
+        });
+    }
+
+    @JavascriptInterface
+    public void issueMemberOnboardingCredential(final String payloadJson) {
+        run("issue-member-onboarding", new Operation() {
+            @Override public Result execute() throws Exception {
+                final MemberOnboardingRequest request = MemberOnboardingRequest.parse(payloadJson);
+                return signCredential("member-onboarding", new SignedFactory() {
+                    @Override public String create(
+                            String credentialId, String keyId, String issuedAt) {
+                        return CredentialV1.canonicalMemberOnboardingSigned(
+                                credentialId, keyId, issuedAt, request.canonicalPayload);
                     }
                 });
             }
@@ -385,6 +402,158 @@ public final class CredentialIssuerBridge {
             Set<String> expectedKeys = new HashSet<String>(Arrays.asList(expected));
             if (!keys.equals(expectedKeys)) {
                 throw new IllegalArgumentException("special-training payload fields are invalid");
+            }
+        }
+    }
+
+    private static final class MemberOnboardingRequest {
+        final String canonicalPayload;
+
+        MemberOnboardingRequest(String canonicalPayload) {
+            this.canonicalPayload = canonicalPayload;
+        }
+
+        static MemberOnboardingRequest parse(String json) throws Exception {
+            if (json == null || json.length() == 0) {
+                throw new IllegalArgumentException("member-onboarding payload is required");
+            }
+            JSONObject payload = new JSONObject(json);
+            requireExactKeys(payload, "onboardingId", "revision", "supersedesCredentialId",
+                    "recognizedAt", "membership", "recognizedRanks", "currentRankEntryId",
+                    "baselineAsOf", "currentRankSessionBaseline", "kataBaselines");
+            String onboardingId = requireString(payload, "onboardingId");
+            long revision = requireSafeInteger(payload, "revision");
+            String supersedes = nullableString(payload, "supersedesCredentialId");
+            String recognizedAt = requireString(payload, "recognizedAt");
+            String baselineAsOf = requireString(payload, "baselineAsOf");
+            JSONObject membership = requireObject(payload, "membership");
+            requireExactKeys(membership, "name", "memberId", "joinedAt");
+            String name = requireString(membership, "name");
+            String memberId = requireString(membership, "memberId");
+            String joinedAt = requireString(membership, "joinedAt");
+            CredentialV1.validateOnboardingIdentity(onboardingId, revision, supersedes,
+                    recognizedAt, baselineAsOf, name, memberId, joinedAt);
+
+            JSONArray ranks = requireArray(payload, "recognizedRanks");
+            if (ranks.length() == 0) throw new IllegalArgumentException("recognizedRanks is empty");
+            Set<String> entryIds = new HashSet<String>();
+            long previousOrdinal = 0;
+            String currentEntryId = requireString(payload, "currentRankEntryId");
+            StringBuilder canonicalRanks = new StringBuilder("[");
+            String lastEntryId = null;
+            for (int index = 0; index < ranks.length(); index++) {
+                JSONObject rank = ranks.getJSONObject(index);
+                requireExactKeys(rank, "entryId", "rankType", "rankValue", "rankDate");
+                String entryId = requireString(rank, "entryId");
+                String rankType = requireString(rank, "rankType");
+                long rankValue = requireSafeInteger(rank, "rankValue");
+                String rankDate = nullableString(rank, "rankDate");
+                CredentialV1.validateOnboardingRank(entryId, rankType, rankValue, rankDate);
+                if (!entryIds.add(entryId)) throw new IllegalArgumentException("duplicate entryId");
+                long ordinal = "kyu".equals(rankType) ? 10 - rankValue : 9 + rankValue;
+                if (ordinal <= previousOrdinal) throw new IllegalArgumentException("ranks not ascending");
+                previousOrdinal = ordinal;
+                lastEntryId = entryId;
+                if (index > 0) canonicalRanks.append(',');
+                canonicalRanks.append("{\"entryId\":").append(JSONObject.quote(entryId))
+                        .append(",\"rankDate\":").append(rankDate == null ? "null" : JSONObject.quote(rankDate))
+                        .append(",\"rankType\":").append(JSONObject.quote(rankType))
+                        .append(",\"rankValue\":").append(rankValue).append('}');
+            }
+            canonicalRanks.append(']');
+            if (!currentEntryId.equals(lastEntryId)) {
+                throw new IllegalArgumentException("currentRankEntryId must be highest rank");
+            }
+
+            Object sessionBaselineValue = payload.get("currentRankSessionBaseline");
+            String sessionBaseline = canonicalNullableCount(sessionBaselineValue);
+            JSONArray kata = requireArray(payload, "kataBaselines");
+            Set<String> kataIds = new HashSet<String>();
+            StringBuilder canonicalKata = new StringBuilder("[");
+            for (int index = 0; index < kata.length(); index++) {
+                JSONObject item = kata.getJSONObject(index);
+                requireExactKeys(item, "kataId", "count");
+                String kataId = requireString(item, "kataId");
+                if (!kataIds.add(kataId)) throw new IllegalArgumentException("duplicate kataId");
+                String count = canonicalNullableCount(item.get("count"));
+                if (index > 0) canonicalKata.append(',');
+                canonicalKata.append("{\"count\":").append(count)
+                        .append(",\"kataId\":").append(JSONObject.quote(kataId)).append('}');
+            }
+            canonicalKata.append(']');
+
+            String canonicalMembership = "{\"joinedAt\":" + JSONObject.quote(joinedAt)
+                    + ",\"memberId\":" + JSONObject.quote(memberId)
+                    + ",\"name\":" + JSONObject.quote(name) + "}";
+            String canonical = "{\"baselineAsOf\":" + JSONObject.quote(baselineAsOf)
+                    + ",\"currentRankEntryId\":" + JSONObject.quote(currentEntryId)
+                    + ",\"currentRankSessionBaseline\":" + sessionBaseline
+                    + ",\"kataBaselines\":" + canonicalKata
+                    + ",\"membership\":" + canonicalMembership
+                    + ",\"onboardingId\":" + JSONObject.quote(onboardingId)
+                    + ",\"recognizedAt\":" + JSONObject.quote(recognizedAt)
+                    + ",\"recognizedRanks\":" + canonicalRanks
+                    + ",\"revision\":" + revision
+                    + ",\"supersedesCredentialId\":"
+                    + (supersedes == null ? "null" : JSONObject.quote(supersedes)) + "}";
+            return new MemberOnboardingRequest(canonical);
+        }
+
+        private static String canonicalNullableCount(Object value) {
+            if (value == JSONObject.NULL) return "null";
+            if (!(value instanceof Integer) && !(value instanceof Long)) {
+                throw new IllegalArgumentException("baseline count must be an integer or null");
+            }
+            long count = ((Number) value).longValue();
+            if (count < 0 || count > 9007199254740991L) {
+                throw new IllegalArgumentException("baseline count is invalid");
+            }
+            return Long.toString(count);
+        }
+
+        private static long requireSafeInteger(JSONObject object, String key) throws Exception {
+            Object value = object.get(key);
+            if (!(value instanceof Integer) && !(value instanceof Long)) {
+                throw new IllegalArgumentException(key + " must be an integer");
+            }
+            long number = ((Number) value).longValue();
+            if (number < 0 || number > 9007199254740991L) {
+                throw new IllegalArgumentException(key + " must be a safe nonnegative integer");
+            }
+            return number;
+        }
+
+        private static String nullableString(JSONObject object, String key) throws Exception {
+            Object value = object.get(key);
+            if (value == JSONObject.NULL) return null;
+            if (!(value instanceof String)) throw new IllegalArgumentException(key + " must be string or null");
+            return (String) value;
+        }
+
+        private static JSONObject requireObject(JSONObject object, String key) throws Exception {
+            Object value = object.get(key);
+            if (!(value instanceof JSONObject)) throw new IllegalArgumentException(key + " must be object");
+            return (JSONObject) value;
+        }
+
+        private static JSONArray requireArray(JSONObject object, String key) throws Exception {
+            Object value = object.get(key);
+            if (!(value instanceof JSONArray)) throw new IllegalArgumentException(key + " must be array");
+            return (JSONArray) value;
+        }
+
+        private static String requireString(JSONObject object, String key) throws Exception {
+            Object value = object.get(key);
+            if (!(value instanceof String)) throw new IllegalArgumentException(key + " must be string");
+            return (String) value;
+        }
+
+        private static void requireExactKeys(JSONObject object, String... expected) {
+            Set<String> keys = new HashSet<String>();
+            Iterator<String> iterator = object.keys();
+            while (iterator.hasNext()) keys.add(iterator.next());
+            if (!keys.equals(new HashSet<String>(Arrays.asList(expected)))) {
+                throw new IllegalArgumentException("member-onboarding payload fields are invalid");
             }
         }
     }
