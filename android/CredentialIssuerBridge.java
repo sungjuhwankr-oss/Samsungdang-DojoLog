@@ -108,6 +108,22 @@ public final class CredentialIssuerBridge {
     }
 
     @JavascriptInterface
+    public void issueSpecialTrainingV2Credential(final String payloadJson) {
+        run("issue-special-training-v2", new Operation() {
+            @Override public Result execute() throws Exception {
+                final SpecialTrainingV2Request request = SpecialTrainingV2Request.parse(payloadJson);
+                return signCredential("special-training", new SignedFactory() {
+                    @Override public String create(
+                            String credentialId, String keyId, String issuedAt) {
+                        return CredentialV1.canonicalSpecialTrainingV2Signed(
+                                credentialId, keyId, issuedAt, request.canonicalPayload);
+                    }
+                });
+            }
+        });
+    }
+
+    @JavascriptInterface
     public void issueMemberOnboardingCredential(final String payloadJson) {
         run("issue-member-onboarding", new Operation() {
             @Override public Result execute() throws Exception {
@@ -402,6 +418,103 @@ public final class CredentialIssuerBridge {
             Set<String> expectedKeys = new HashSet<String>(Arrays.asList(expected));
             if (!keys.equals(expectedKeys)) {
                 throw new IllegalArgumentException("special-training payload fields are invalid");
+            }
+        }
+    }
+
+    private static final class SpecialTrainingV2Request {
+        final String canonicalPayload;
+
+        SpecialTrainingV2Request(String canonicalPayload) {
+            this.canonicalPayload = canonicalPayload;
+        }
+
+        static SpecialTrainingV2Request parse(String json) throws Exception {
+            if (json == null || json.length() == 0) {
+                throw new IllegalArgumentException("special-training v2 payload is required");
+            }
+            JSONObject payload = new JSONObject(json);
+            requireExactKeys(payload, "eventId", "revision", "supersedesCredentialId",
+                    "title", "category", "startDate", "endDate", "instructor", "sessions");
+            String eventId = requireString(payload, "eventId");
+            long revision = requireSafePositiveInteger(payload, "revision");
+            String supersedes = nullableString(payload, "supersedesCredentialId");
+            String title = requireString(payload, "title");
+            if (!"special-training".equals(requireString(payload, "category"))) {
+                throw new IllegalArgumentException("category must be special-training");
+            }
+            String startDate = requireString(payload, "startDate");
+            String endDate = nullableString(payload, "endDate");
+            String instructor = requireString(payload, "instructor");
+            CredentialV1.validateSpecialTrainingV2Identity(
+                    eventId, revision, supersedes, title, startDate, endDate, instructor);
+            Object sessionsValue = payload.get("sessions");
+            if (!(sessionsValue instanceof JSONArray)) {
+                throw new IllegalArgumentException("sessions must be an array");
+            }
+            JSONArray sessions = (JSONArray) sessionsValue;
+            if (sessions.length() == 0) throw new IllegalArgumentException("sessions is empty");
+            Set<String> ids = new HashSet<String>();
+            StringBuilder canonicalSessions = new StringBuilder("[");
+            for (int index = 0; index < sessions.length(); index++) {
+                JSONObject session = sessions.getJSONObject(index);
+                requireExactKeys(session, "sessionId", "date", "label");
+                String sessionId = requireString(session, "sessionId");
+                String date = requireString(session, "date");
+                String label = requireString(session, "label");
+                CredentialV1.validateSpecialTrainingV2Session(
+                        sessionId, date, label, startDate, endDate);
+                if (!ids.add(sessionId)) throw new IllegalArgumentException("duplicate sessionId");
+                if (index > 0) canonicalSessions.append(',');
+                canonicalSessions.append("{\"date\":").append(CredentialV1.quote(date))
+                        .append(",\"label\":").append(CredentialV1.quote(label))
+                        .append(",\"sessionId\":").append(CredentialV1.quote(sessionId)).append('}');
+            }
+            canonicalSessions.append(']');
+            String canonical = "{\"category\":\"special-training\""
+                    + ",\"endDate\":" + (endDate == null ? "null" : CredentialV1.quote(endDate))
+                    + ",\"eventId\":" + CredentialV1.quote(eventId)
+                    + ",\"instructor\":" + CredentialV1.quote(instructor)
+                    + ",\"revision\":" + revision
+                    + ",\"sessions\":" + canonicalSessions
+                    + ",\"startDate\":" + CredentialV1.quote(startDate)
+                    + ",\"supersedesCredentialId\":"
+                    + (supersedes == null ? "null" : CredentialV1.quote(supersedes))
+                    + ",\"title\":" + CredentialV1.quote(title) + "}";
+            return new SpecialTrainingV2Request(canonical);
+        }
+
+        private static long requireSafePositiveInteger(JSONObject object, String key) throws Exception {
+            Object value = object.get(key);
+            if (!(value instanceof Integer) && !(value instanceof Long)) {
+                throw new IllegalArgumentException(key + " must be an integer");
+            }
+            long number = ((Number) value).longValue();
+            if (number < 1 || number > 9007199254740991L) {
+                throw new IllegalArgumentException(key + " is invalid");
+            }
+            return number;
+        }
+
+        private static String nullableString(JSONObject object, String key) throws Exception {
+            Object value = object.get(key);
+            if (value == JSONObject.NULL) return null;
+            if (!(value instanceof String)) throw new IllegalArgumentException(key + " must be string or null");
+            return (String) value;
+        }
+
+        private static String requireString(JSONObject object, String key) throws Exception {
+            Object value = object.get(key);
+            if (!(value instanceof String)) throw new IllegalArgumentException(key + " must be string");
+            return (String) value;
+        }
+
+        private static void requireExactKeys(JSONObject object, String... expected) {
+            Set<String> keys = new HashSet<String>();
+            Iterator<String> iterator = object.keys();
+            while (iterator.hasNext()) keys.add(iterator.next());
+            if (!keys.equals(new HashSet<String>(Arrays.asList(expected)))) {
+                throw new IllegalArgumentException("special-training v2 payload fields are invalid");
             }
         }
     }

@@ -81,6 +81,21 @@ public final class CredentialCoreTest {
                 + "\"title\":\"Phase 4J 테스트 특별수련\"},"
                 + "\"schema\":\"samsungdang-dojolog-credential\","
                 + "\"type\":\"special-training\"}"), "special-training TS/Java JCS parity");
+        CredentialV1.validateSpecialTrainingV2Identity(
+                "st1_AAECAwQFBgcICQoLDA0ODw", 1, null,
+                "Phase 4K-D 특별수련", "2026-10-24", "2026-10-25", "테스트 지도자");
+        CredentialV1.validateSpecialTrainingV2Session(
+                "sts1_AAECAwQFBgcICQoLDA0ODw", "2026-10-24", "오전 수련",
+                "2026-10-24", "2026-10-25");
+        String specialV2Payload = "{\"category\":\"special-training\",\"endDate\":\"2026-10-25\""
+                + ",\"eventId\":\"st1_AAECAwQFBgcICQoLDA0ODw\",\"instructor\":\"테스트 지도자\""
+                + ",\"revision\":1,\"sessions\":[{\"date\":\"2026-10-24\",\"label\":\"오전 수련\""
+                + ",\"sessionId\":\"sts1_AAECAwQFBgcICQoLDA0ODw\"}],\"startDate\":\"2026-10-24\""
+                + ",\"supersedesCredentialId\":null,\"title\":\"Phase 4K-D 특별수련\"}";
+        String specialV2 = CredentialV1.canonicalSpecialTrainingV2Signed(
+                "c1_AAECAwQFBgcICQoLDA0ODw", keyId, "2026-10-24T04:00:00Z", specialV2Payload);
+        require(specialV2.contains("\"credentialVersion\":2"), "special-training v2 version");
+        require(specialV2.contains(specialV2Payload), "special-training v2 canonical payload");
         expectFailure(() -> CredentialV1.canonicalMembershipSigned(
                 credentialId, keyId, "2026-09-21T08:30:60Z",
                 name, "ASD-000", "2026-09-21"), "invalid UTC second");

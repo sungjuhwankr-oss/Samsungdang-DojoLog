@@ -22,6 +22,8 @@ public final class CredentialV1 {
     private static final Pattern CREDENTIAL_ID = Pattern.compile("c1_[A-Za-z0-9_-]{22}");
     private static final Pattern SPECIAL_TRAINING_EVENT_ID =
             Pattern.compile("st1_[A-Za-z0-9_-]{22}");
+    private static final Pattern SPECIAL_TRAINING_SESSION_ID =
+            Pattern.compile("sts1_[A-Za-z0-9_-]{22}");
     private static final Pattern ONBOARDING_ID = Pattern.compile("on1_[A-Za-z0-9_-]{22}");
     private static final Pattern ONBOARDING_ENTRY_ID = Pattern.compile("or1_[A-Za-z0-9_-]{22}");
     private static final Pattern ONBOARDING_MEMBER_ID = Pattern.compile("ASD-[0-9]{3,}");
@@ -220,6 +222,60 @@ public final class CredentialV1 {
                 credentialId, keyId, issuedAt, TYPE_SPECIAL_TRAINING, payload);
     }
 
+    public static void validateSpecialTrainingV2Identity(
+            String eventId,
+            long revision,
+            String supersedesCredentialId,
+            String title,
+            String startDate,
+            String endDate,
+            String instructor) {
+        if (eventId == null || !SPECIAL_TRAINING_EVENT_ID.matcher(eventId).matches()) {
+            throw new IllegalArgumentException("invalid eventId");
+        }
+        if (revision < 1 || revision > MAX_SAFE_INTEGER) {
+            throw new IllegalArgumentException("invalid revision");
+        }
+        if (supersedesCredentialId != null
+                && !CREDENTIAL_ID.matcher(supersedesCredentialId).matches()) {
+            throw new IllegalArgumentException("invalid supersedesCredentialId");
+        }
+        if (revision > 1 && supersedesCredentialId == null) {
+            throw new IllegalArgumentException("correction requires supersedesCredentialId");
+        }
+        validateRequiredText(title, "title");
+        validateRequiredText(instructor, "instructor");
+        requireCalendarDate(startDate, "startDate");
+        if (endDate != null) {
+            requireCalendarDate(endDate, "endDate");
+            if (endDate.compareTo(startDate) < 0) {
+                throw new IllegalArgumentException("endDate must not be before startDate");
+            }
+        }
+    }
+
+    public static void validateSpecialTrainingV2Session(
+            String sessionId, String date, String label, String startDate, String endDate) {
+        if (sessionId == null || !SPECIAL_TRAINING_SESSION_ID.matcher(sessionId).matches()) {
+            throw new IllegalArgumentException("invalid sessionId");
+        }
+        requireCalendarDate(date, "session date");
+        String effectiveEnd = endDate == null ? startDate : endDate;
+        if (date.compareTo(startDate) < 0 || date.compareTo(effectiveEnd) > 0) {
+            throw new IllegalArgumentException("session date is outside event range");
+        }
+        validateRequiredText(label, "session label");
+    }
+
+    public static String canonicalSpecialTrainingV2Signed(
+            String credentialId,
+            String keyId,
+            String issuedAt,
+            String canonicalPayload) {
+        return canonicalSignedVersion(
+                credentialId, keyId, issuedAt, TYPE_SPECIAL_TRAINING, canonicalPayload, 2);
+    }
+
     public static String canonicalMemberOnboardingSigned(
             String credentialId,
             String keyId,
@@ -271,6 +327,16 @@ public final class CredentialV1 {
             String issuedAt,
             String type,
             String canonicalPayload) {
+        return canonicalSignedVersion(credentialId, keyId, issuedAt, type, canonicalPayload, 1);
+    }
+
+    private static String canonicalSignedVersion(
+            String credentialId,
+            String keyId,
+            String issuedAt,
+            String type,
+            String canonicalPayload,
+            int credentialVersion) {
         if (credentialId == null || !CREDENTIAL_ID.matcher(credentialId).matches()) {
             throw new IllegalArgumentException("invalid credentialId");
         }
@@ -289,8 +355,11 @@ public final class CredentialV1 {
         if (canonicalPayload == null || canonicalPayload.length() == 0) {
             throw new IllegalArgumentException("canonical payload is required");
         }
+        if (credentialVersion != 1 && !(credentialVersion == 2 && TYPE_SPECIAL_TRAINING.equals(type))) {
+            throw new IllegalArgumentException("unsupported credential version");
+        }
         return "{\"credentialId\":" + quote(credentialId)
-                + ",\"credentialVersion\":1"
+                + ",\"credentialVersion\":" + credentialVersion
                 + ",\"issuedAt\":" + quote(issuedAt)
                 + ",\"issuer\":" + quote(ISSUER)
                 + ",\"keyId\":" + quote(keyId)

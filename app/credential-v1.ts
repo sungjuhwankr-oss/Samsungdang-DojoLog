@@ -1,5 +1,6 @@
 export const CREDENTIAL_SCHEMA = "samsungdang-dojolog-credential";
 export const CREDENTIAL_VERSION = 1;
+export const SPECIAL_TRAINING_CREDENTIAL_VERSION = 2;
 export const CREDENTIAL_ISSUER = "aikido-samsungdang";
 export const MEMBERSHIP_TYPE = "membership";
 export const PROMOTION_TYPE = "promotion";
@@ -97,6 +98,34 @@ export type SpecialTrainingCredential = {
   signature: string;
 };
 
+export type SpecialTrainingSession = {
+  sessionId: string;
+  date: string;
+  label: string;
+};
+
+export type SpecialTrainingV2Payload = {
+  eventId: string;
+  revision: number;
+  supersedesCredentialId: string | null;
+  title: string;
+  category: "special-training";
+  startDate: string;
+  endDate: string | null;
+  instructor: string;
+  sessions: SpecialTrainingSession[];
+};
+
+export type SpecialTrainingV2Signed = Omit<SpecialTrainingSigned, "credentialVersion" | "payload"> & {
+  credentialVersion: typeof SPECIAL_TRAINING_CREDENTIAL_VERSION;
+  payload: SpecialTrainingV2Payload;
+};
+
+export type SpecialTrainingV2Credential = {
+  signed: SpecialTrainingV2Signed;
+  signature: string;
+};
+
 export type CredentialV1 = MembershipCredential | PromotionCredential | SpecialTrainingCredential;
 
 export type TrustedKeyBootstrap = {
@@ -119,6 +148,7 @@ export type TrustedKeyBootstrap = {
 const MEMBER_ID = /^ASD-[0-9]{3}$/;
 const CREDENTIAL_ID = /^c1_[A-Za-z0-9_-]{22}$/;
 const SPECIAL_TRAINING_EVENT_ID = /^st1_[A-Za-z0-9_-]{22}$/;
+const SPECIAL_TRAINING_SESSION_ID = /^sts1_[A-Za-z0-9_-]{22}$/;
 const KEY_ID = /^k1_[A-Za-z0-9_-]{43}$/;
 const ISSUED_AT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 const SPECIAL_TRAINING_CATEGORIES = new Set<SpecialTrainingCategory>([
@@ -274,6 +304,46 @@ export function specialTrainingInputErrors(input: unknown): string[] {
   }
 }
 
+export function validateSpecialTrainingV2Payload(value: unknown): asserts value is SpecialTrainingV2Payload {
+  if (!plainObject(value) || !exactKeys(value, [
+    "eventId", "revision", "supersedesCredentialId", "title", "category",
+    "startDate", "endDate", "instructor", "sessions"
+  ])) throw new Error("invalid special-training v2 payload fields");
+  if (typeof value.eventId !== "string" || !SPECIAL_TRAINING_EVENT_ID.test(value.eventId)) throw new Error("invalid eventId");
+  if (typeof value.revision !== "number" || !Number.isSafeInteger(value.revision) || value.revision < 1) throw new Error("invalid revision");
+  if (value.supersedesCredentialId !== null && (typeof value.supersedesCredentialId !== "string" || !CREDENTIAL_ID.test(value.supersedesCredentialId))) {
+    throw new Error("invalid supersedesCredentialId");
+  }
+  if (value.revision > 1 && value.supersedesCredentialId === null) throw new Error("correction requires supersedesCredentialId");
+  if (value.category !== "special-training") throw new Error("category must be special-training");
+  for (const field of ["title", "instructor"] as const) {
+    const text = value[field];
+    if (typeof text !== "string" || !text.trim() || text.length > 200 || !hasWellFormedUnicode(text)) throw new Error(`invalid ${field}`);
+  }
+  if (typeof value.startDate !== "string" || !isCalendarDate(value.startDate)) throw new Error("invalid startDate");
+  if (value.endDate !== null && (typeof value.endDate !== "string" || !isCalendarDate(value.endDate))) throw new Error("invalid endDate");
+  const effectiveEnd = value.endDate ?? value.startDate;
+  if (effectiveEnd < value.startDate) throw new Error("endDate must not be before startDate");
+  if (!Array.isArray(value.sessions) || value.sessions.length === 0) throw new Error("sessions must contain at least one session");
+  const ids = new Set<string>();
+  for (const session of value.sessions) {
+    if (!plainObject(session) || !exactKeys(session, ["sessionId", "date", "label"])) throw new Error("invalid session fields");
+    if (typeof session.sessionId !== "string" || !SPECIAL_TRAINING_SESSION_ID.test(session.sessionId) || ids.has(session.sessionId)) throw new Error("invalid or duplicate sessionId");
+    if (typeof session.date !== "string" || !isCalendarDate(session.date) || session.date < value.startDate || session.date > effectiveEnd) throw new Error("session date is outside event range");
+    if (typeof session.label !== "string" || !session.label.trim() || session.label.length > 200 || !hasWellFormedUnicode(session.label)) throw new Error("invalid session label");
+    ids.add(session.sessionId);
+  }
+}
+
+export function specialTrainingV2InputErrors(input: unknown): string[] {
+  try {
+    validateSpecialTrainingV2Payload(input);
+    return [];
+  } catch (error) {
+    return [error instanceof Error ? error.message : "invalid special-training v2 payload"];
+  }
+}
+
 function validUtcSecond(value: string): boolean {
   if (!ISSUED_AT.test(value)) return false;
   const date = value.slice(0, 10);
@@ -326,6 +396,18 @@ export function validateSpecialTrainingSigned(value: unknown): asserts value is 
   validateSpecialTrainingPayload(value.payload);
 }
 
+export function validateSpecialTrainingV2Signed(value: unknown): asserts value is SpecialTrainingV2Signed {
+  if (!plainObject(value) || !exactKeys(value, [
+    "schema", "credentialVersion", "issuer", "type", "credentialId", "keyId", "issuedAt", "payload"
+  ])) throw new Error("signed object fields are invalid");
+  if (value.schema !== CREDENTIAL_SCHEMA || value.credentialVersion !== SPECIAL_TRAINING_CREDENTIAL_VERSION ||
+      value.issuer !== CREDENTIAL_ISSUER || value.type !== SPECIAL_TRAINING_TYPE) throw new Error("unsupported special-training v2 envelope");
+  if (typeof value.credentialId !== "string" || !CREDENTIAL_ID.test(value.credentialId)) throw new Error("invalid credentialId");
+  if (typeof value.keyId !== "string" || !KEY_ID.test(value.keyId)) throw new Error("invalid keyId");
+  if (typeof value.issuedAt !== "string" || !validUtcSecond(value.issuedAt)) throw new Error("invalid issuedAt");
+  validateSpecialTrainingV2Payload(value.payload);
+}
+
 export function parseMembershipCredential(json: string): MembershipCredential {
   const value: unknown = JSON.parse(json);
   if (!plainObject(value) || !exactKeys(value, ["signed", "signature"])) throw new Error("credential envelope fields are invalid");
@@ -351,6 +433,15 @@ export function parseSpecialTrainingCredential(json: string): SpecialTrainingCre
   if (typeof value.signature !== "string") throw new Error("credential signature is invalid");
   decodeCanonicalBase64Url(value.signature, 64);
   return value as SpecialTrainingCredential;
+}
+
+export function parseSpecialTrainingV2Credential(json: string): SpecialTrainingV2Credential {
+  const value: unknown = JSON.parse(json);
+  if (!plainObject(value) || !exactKeys(value, ["signed", "signature"])) throw new Error("credential envelope fields are invalid");
+  validateSpecialTrainingV2Signed(value.signed);
+  if (typeof value.signature !== "string") throw new Error("credential signature is invalid");
+  decodeCanonicalBase64Url(value.signature, 64);
+  return value as SpecialTrainingV2Credential;
 }
 
 export function parseTrustedKeyBootstrap(json: string): TrustedKeyBootstrap {
@@ -436,6 +527,30 @@ export function canonicalizeSpecialTrainingSigned(value: unknown): string {
     + `,"type":${JSON.stringify(value.type)}}`;
 }
 
+export function canonicalizeSpecialTrainingV2Signed(value: unknown): string {
+  validateSpecialTrainingV2Signed(value);
+  const sessions = value.payload.sessions.map(session =>
+    `{"date":${JSON.stringify(session.date)},"label":${JSON.stringify(session.label)},"sessionId":${JSON.stringify(session.sessionId)}}`
+  ).join(",");
+  const payload = `{"category":"special-training"`
+    + `,"endDate":${value.payload.endDate === null ? "null" : JSON.stringify(value.payload.endDate)}`
+    + `,"eventId":${JSON.stringify(value.payload.eventId)}`
+    + `,"instructor":${JSON.stringify(value.payload.instructor)}`
+    + `,"revision":${value.payload.revision}`
+    + `,"sessions":[${sessions}]`
+    + `,"startDate":${JSON.stringify(value.payload.startDate)}`
+    + `,"supersedesCredentialId":${value.payload.supersedesCredentialId === null ? "null" : JSON.stringify(value.payload.supersedesCredentialId)}`
+    + `,"title":${JSON.stringify(value.payload.title)}}`;
+  return `{"credentialId":${JSON.stringify(value.credentialId)}`
+    + `,"credentialVersion":2`
+    + `,"issuedAt":${JSON.stringify(value.issuedAt)}`
+    + `,"issuer":${JSON.stringify(value.issuer)}`
+    + `,"keyId":${JSON.stringify(value.keyId)}`
+    + `,"payload":${payload}`
+    + `,"schema":${JSON.stringify(value.schema)}`
+    + `,"type":${JSON.stringify(value.type)}}`;
+}
+
 export function encodeUnpaddedBase64Url(bytes: Uint8Array): string {
   let binary = "";
   for (let index = 0; index < bytes.length; index += 0x8000) {
@@ -470,6 +585,10 @@ export function generateSpecialTrainingEventId(): string {
   return createSpecialTrainingEventId(crypto.getRandomValues(new Uint8Array(16)));
 }
 
+export function generateSpecialTrainingSessionId(): string {
+  return `sts1_${encodeUnpaddedBase64Url(crypto.getRandomValues(new Uint8Array(16)))}`;
+}
+
 function copiedArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(bytes);
@@ -481,13 +600,13 @@ export async function calculateKeyId(spkiDer: Uint8Array): Promise<string> {
   return `k1_${encodeUnpaddedBase64Url(new Uint8Array(digest))}`;
 }
 
-export function createCredentialTransportToken(credential: CredentialV1): string {
+export function createCredentialTransportToken(credential: CredentialV1 | SpecialTrainingV2Credential): string {
   const compactJson = JSON.stringify(credential);
   return encodeUnpaddedBase64Url(new TextEncoder().encode(compactJson));
 }
 
 export function createCredentialDeepLink(
-  credential: CredentialV1,
+  credential: CredentialV1 | SpecialTrainingV2Credential,
   target: { baseUrl: string; route: string; parameterName: string }
 ): string {
   const base = new URL(target.route, target.baseUrl);
@@ -518,8 +637,15 @@ export async function verifySpecialTrainingCredential(
   return verifyCredential(credential, bootstrap, canonicalizeSpecialTrainingSigned);
 }
 
+export async function verifySpecialTrainingV2Credential(
+  credential: SpecialTrainingV2Credential,
+  bootstrap: TrustedKeyBootstrap
+): Promise<boolean> {
+  return verifyCredential(credential, bootstrap, canonicalizeSpecialTrainingV2Signed);
+}
+
 async function verifyCredential(
-  credential: CredentialV1,
+  credential: CredentialV1 | SpecialTrainingV2Credential,
   bootstrap: TrustedKeyBootstrap,
   canonicalize: (value: unknown) => string
 ): Promise<boolean> {

@@ -1,5 +1,5 @@
 export type NativeCredentialResult = {
-  operation: "provision-key" | "issue-membership" | "issue-promotion" | "issue-special-training" | "issue-member-onboarding";
+  operation: "provision-key" | "issue-membership" | "issue-promotion" | "issue-special-training" | "issue-special-training-v2" | "issue-member-onboarding";
   status: "success" | "error";
   json?: string;
   bootstrap?: string;
@@ -13,6 +13,7 @@ type NativeCredentialBridge = {
   issueMembershipCredential: (name: string, memberId: string, joinedAt: string) => void;
   issuePromotionCredential: (payloadJson: string) => void;
   issueSpecialTrainingCredential: (payloadJson: string) => void;
+  issueSpecialTrainingV2Credential: (payloadJson: string) => void;
   issueMemberOnboardingCredential: (payloadJson: string) => void;
 };
 
@@ -27,6 +28,7 @@ export function hasNativeCredentialBridge(): boolean {
     && typeof bridge()?.issueMembershipCredential === "function"
     && typeof bridge()?.issuePromotionCredential === "function"
     && typeof bridge()?.issueSpecialTrainingCredential === "function"
+    && typeof bridge()?.issueSpecialTrainingV2Credential === "function"
     && typeof bridge()?.issueMemberOnboardingCredential === "function";
 }
 
@@ -79,6 +81,13 @@ export function issueNativeSpecialTrainingCredential(payload: object): Promise<N
   return nativeResult(
     "issue-special-training",
     native => native.issueSpecialTrainingCredential(JSON.stringify(payload))
+  );
+}
+
+export function issueNativeSpecialTrainingV2Credential(payload: object): Promise<NativeCredentialResult> {
+  return nativeResult(
+    "issue-special-training-v2",
+    native => native.issueSpecialTrainingV2Credential(JSON.stringify(payload))
   );
 }
 

@@ -1,6 +1,12 @@
 import QRCode from "qrcode";
 
-import { createCredentialDeepLink, type SpecialTrainingCredential } from "./credential-v1";
+import {
+  createCredentialDeepLink,
+  encodeUnpaddedBase64Url,
+  parseSpecialTrainingV2Credential,
+  type SpecialTrainingCredential,
+  type SpecialTrainingV2Credential
+} from "./credential-v1";
 
 export const SPECIAL_TRAINING_PRODUCTION_BASE_URL = "https://sungjuhwankr-oss.github.io";
 export const SPECIAL_TRAINING_PRODUCTION_ROUTE = "/Samsungdang-DojoLog-Member/special-training/";
@@ -9,6 +15,7 @@ export const SPECIAL_TRAINING_QR_ERROR_CORRECTION = "M" as const;
 export const SPECIAL_TRAINING_QR_MARGIN = 4;
 export const SPECIAL_TRAINING_QR_SIZE = 900;
 export const SPECIAL_TRAINING_SAVED_QR_MIN_QUIET_ZONE_MODULES = 16;
+export const SPECIAL_TRAINING_INFLATED_LIMIT = 128 * 1024;
 
 export type SpecialTrainingSavedQrGeometry = {
   moduleCount: number;
@@ -26,6 +33,47 @@ export function createSpecialTrainingProductionLink(credential: SpecialTrainingC
     route: SPECIAL_TRAINING_PRODUCTION_ROUTE,
     parameterName: SPECIAL_TRAINING_QUERY_PARAMETER
   });
+}
+
+function linkForToken(token: string): string {
+  const url = new URL(SPECIAL_TRAINING_PRODUCTION_ROUTE, SPECIAL_TRAINING_PRODUCTION_BASE_URL);
+  url.searchParams.set(SPECIAL_TRAINING_QUERY_PARAMETER, token);
+  return url.toString();
+}
+
+function fitsQr(link: string): boolean {
+  try {
+    QRCode.create(link, { version: 40, errorCorrectionLevel: SPECIAL_TRAINING_QR_ERROR_CORRECTION });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function copiedBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
+async function gzip(bytes: Uint8Array): Promise<Uint8Array> {
+  const stream = new Blob([copiedBuffer(bytes)]).stream().pipeThrough(new CompressionStream("gzip"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+export async function createSpecialTrainingV2TransportToken(credential: SpecialTrainingV2Credential): Promise<string> {
+  parseSpecialTrainingV2Credential(JSON.stringify(credential));
+  const jsonBytes = new TextEncoder().encode(JSON.stringify(credential));
+  if (jsonBytes.byteLength > SPECIAL_TRAINING_INFLATED_LIMIT) throw new Error("special-training envelope exceeds inflated size limit");
+  const raw = encodeUnpaddedBase64Url(jsonBytes);
+  if (fitsQr(linkForToken(raw))) return raw;
+  const compressed = `gz1.${encodeUnpaddedBase64Url(await gzip(jsonBytes))}`;
+  if (!fitsQr(linkForToken(compressed))) throw new Error("special-training credential exceeds QR Version 40-M capacity");
+  return compressed;
+}
+
+export async function createSpecialTrainingV2ProductionLink(credential: SpecialTrainingV2Credential): Promise<string> {
+  return linkForToken(await createSpecialTrainingV2TransportToken(credential));
 }
 
 export function createSpecialTrainingQrDataUrl(productionLink: string): Promise<string> {
