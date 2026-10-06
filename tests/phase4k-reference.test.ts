@@ -3,7 +3,7 @@ import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {KATAS,currentKata,currentKataPresentation,examBadge,bandText,type Grade} from '../app/data';
 import {AWASE_BUNDLES,collapsePlan,expandPlan,selectionUnit,singleUnit,hasOverlappingIds} from '../app/plan-units';
-import {filterJournal} from '../app/journal-view';
+import {analysisExamItem,analysisExamSummary,filterJournal} from '../app/journal-view';
 import {recommendWithSpecialKatas,type GradeMode,type SpecialKataOptions} from '../app/recommendation';
 import {createBandShareText,createImportLink,createSessionSharePayload} from '../app/session-share';
 import {serializeBackup,parseBackupText,type DojoLog} from '../app/backup';
@@ -60,6 +60,20 @@ test('current ID lookup overrides stale grade/video, unknown/custom receive no f
  assert.equal(examBadge(stale.id),'8급');assert.equal(current.grade,8);assert.equal(current.links[0].url,'https://youtu.be/9fULsFpH3oE?t=799s');assert.deepEqual(stale,before);
  for(const id of ['custom-unknown','unknown']){const unknown=currentKataPresentation({...stale,id});assert.equal(examBadge(id),null);assert.equal(unknown.grade,undefined);assert.equal(unknown.exam,false);assert.deepEqual(unknown.links,[])}
  assert.equal(examBadge('좌기-호흡법'),null);
+});
+test('saved-journal Analysis uses current examEntries instead of stale snapshot grade and exam',()=>{
+ const staleKyu={...currentKata('맞서한손잡기-손목뒤집기')!,grade:1 as const,exam:false};
+ const danOnly={...currentKata('13의-장')!,grade:3 as const,exam:false};
+ const nonExam={...currentKata('좌기-호흡법')!,grade:9 as const,exam:true};
+ const custom={...staleKyu,id:'custom-unknown',grade:7 as const,exam:true};
+ assert.deepEqual(analysisExamItem(staleKyu.id),{label:'8급',detail:'8급 심사 직접 대응',direct:true,foundation:true});
+ const dan=analysisExamItem(danOnly.id);assert.equal(dan.label,'유단자용');assert.equal(dan.detail,'유단자용 심사 직접 대응');assert.equal(dan.detail.includes('undefined급'),false);assert.equal(dan.foundation,false);
+ assert.deepEqual(analysisExamItem(nonExam.id),{label:null,detail:'삼성당 심사표 외',direct:false,foundation:false});
+ assert.deepEqual(analysisExamItem(custom.id),{label:null,detail:'삼성당 심사표 외',direct:false,foundation:false});
+ const summary=analysisExamSummary([staleKyu,danOnly,nonExam,custom]);
+ assert.equal(summary.directCount,2);assert.equal(summary.hasFoundation,true);
+ const withoutCurrentKyu=analysisExamSummary([danOnly,nonExam,custom]);
+ assert.equal(withoutCurrentKyu.directCount,1);assert.equal(withoutCurrentKyu.hasFoundation,false);
 });
 test('journal memo/search use the original note and original log identity without mutation',()=>{
  const records=[log(),{...log(),id:'blank',note:'  \n '},{...log(),id:'other',note:'다른 내용'}],before=structuredClone(records);

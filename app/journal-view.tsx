@@ -3,6 +3,15 @@ import {videoActions} from './video-links';
 import type {DojoLog} from './backup';
 
 export type JournalMode='all'|'memo'|'search';
+export type AnalysisExamItem={label:string|null;detail:string;direct:boolean;foundation:boolean};
+export function analysisExamItem(id:string):AnalysisExamItem{
+  const label=examBadge(id);
+  return {label,detail:label?`${label} 심사 직접 대응`:'삼성당 심사표 외',direct:label!==null,foundation:label==='9급'||label==='8급'};
+}
+export function analysisExamSummary(katas:readonly Pick<Kata,'id'>[]){
+  const items=katas.map(kata=>analysisExamItem(kata.id));
+  return {items,directCount:items.filter(item=>item.direct).length,hasFoundation:items.some(item=>item.foundation)};
+}
 export function filterJournal(logs:DojoLog[],mode:JournalMode,query:string):DojoLog[]{
   if(mode==='all')return logs;
   if(mode==='memo')return logs.filter(log=>log.note.trim().length>0);
