@@ -257,7 +257,7 @@ test("legacy v1 issuer remains byte-compatible while v2 reuses the production si
   assert.match(issuerPage, /const eventIdBeforeIssuance = specialPayload\.eventId/);
   assert.match(issuerPage, /credentialId was unexpectedly reused/);
   assert.match(issuerPage, /createSpecialTrainingSavedQrDataUrl\(specialQrDataUrl, productionLink\)/);
-  assert.match(issuerPage, /실제 운영용 특별수련 Credential 발급 — actual E2E 완료 전 비활성/);
+  assert.match(issuerPage, /실제 운영용 특별수련 전자 증명서 발급 — 실제 연동 검증 완료 전 비활성/);
   assert.match(issuerPage, /QR PNG 저장/);
   assert.doesNotMatch(issuerPage, /Production HTTPS link|copySpecialTrainingLink|link 복사|shareSpecialTrainingQr|QR PNG 공유/);
   assert.doesNotMatch(issuerPage, /localStorage|indexedDB|issuedCredential|credentialLedger|deleteEntry/);
@@ -265,9 +265,9 @@ test("legacy v1 issuer remains byte-compatible while v2 reuses the production si
   assert.match(bridge, /run\("issue-special-training-v2"/);
   assert.equal((bridge.match(/StrictEcdsaDer\.toP256Raw/g) ?? []).length, 1);
   assert.match(v2Issuer, /createSpecialTrainingV2ProductionLink/);
-  assert.match(v2Issuer, /QR과 exact same production HTTPS link/);
+  assert.match(v2Issuer, /QR과 동일한 운영용 HTTPS 링크/);
   assert.match(v2Issuer, /QR PNG 저장/);
-  assert.match(v2Issuer, /현재 Instructor Backup v1에도 포함되지 않습니다/);
+  assert.match(v2Issuer, /현재 지도자용 Backup v1에도 포함되지 않습니다/);
 });
 
 const v2Payload: SpecialTrainingV2Payload = {

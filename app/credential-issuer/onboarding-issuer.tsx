@@ -48,7 +48,7 @@ export function OnboardingIssuer({ nativeAvailable }: { nativeAvailable: boolean
   const [outputJson, setOutputJson] = useState("");
   const [link, setLink] = useState("");
   const [qr, setQr] = useState("");
-  const [message, setMessage] = useState("신규 발급 또는 검증된 이전 JSON correction을 준비합니다.");
+  const [message, setMessage] = useState("신규 발급 또는 검증된 이전 JSON의 정정 발급을 준비합니다.");
   const [busy, setBusy] = useState(false);
 
   const mode = source ? "correction" : "new";
@@ -96,11 +96,11 @@ export function OnboardingIssuer({ nativeAvailable }: { nativeAvailable: boolean
       if (result.status !== "success" || !result.json || !result.bootstrap) throw new Error(result.message ?? "발급 실패");
       const credential = parseMemberOnboardingCredential(result.json);
       const bootstrap = parseTrustedKeyBootstrap(result.bootstrap);
-      if (!(await verifyMemberOnboardingCredential(credential, bootstrap))) throw new Error("발급 후 self-verification 실패");
+      if (!(await verifyMemberOnboardingCredential(credential, bootstrap))) throw new Error("발급 후 전자 증명서 자체 검증 실패");
       await renderResult(credential, result.json);
-      setMessage(`${mode === "new" ? "신규" : "correction"} member-onboarding Credential을 생성했습니다.`);
+      setMessage(`${mode === "new" ? "신규" : "정정"} 기존 회원 초기등록 전자 증명서를 생성했습니다.`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "member-onboarding 발급 실패");
+      setMessage(error instanceof Error ? error.message : "기존 회원 초기등록 전자 증명서 발급 실패");
     } finally {
       setBusy(false);
     }
@@ -112,9 +112,9 @@ export function OnboardingIssuer({ nativeAvailable }: { nativeAvailable: boolean
       const json = await file.text();
       const credential = parseMemberOnboardingCredential(json);
       const key = await provisionProductionCredentialKey();
-      if (key.status !== "success" || !key.json) throw new Error(key.message ?? "production key 조회 실패");
+      if (key.status !== "success" || !key.json) throw new Error(key.message ?? "운영용 키 조회 실패");
       if (!(await verifyMemberOnboardingCredential(credential, parseTrustedKeyBootstrap(key.json)))) {
-        throw new Error("이전 Credential 서명 검증 실패");
+        throw new Error("이전 전자 증명서 서명 검증 실패");
       }
       setSource(credential);
       const payload = credential.signed.payload;
@@ -131,7 +131,7 @@ export function OnboardingIssuer({ nativeAvailable }: { nativeAvailable: boolean
       setSessionBaseline(payload.currentRankSessionBaseline === null ? "" : String(payload.currentRankSessionBaseline));
       setKataBaselinesJson(JSON.stringify(payload.kataBaselines, null, 2));
       await renderResult(credential, json);
-      setMessage("이전 JSON을 검증했습니다. 기존 출력은 reissue용이며, 수정 발급 시 revision이 증가합니다.");
+      setMessage("이전 JSON을 검증했습니다. 기존 출력은 재전달용이며, 정정 발급 시 revision이 증가합니다.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "이전 JSON을 불러오지 못했습니다.");
     } finally {
@@ -151,9 +151,9 @@ export function OnboardingIssuer({ nativeAvailable }: { nativeAvailable: boolean
   }
 
   return <section className="panel credential-section">
-    <h2>Existing-member onboarding issuer</h2>
-    <p>한 명의 identity·verified rank/history·reference baseline만 일회성으로 발급하며 회원명부를 저장하지 않습니다.</p>
-    <label className="ghost full">이전 onboarding JSON 검증·불러오기
+    <h2>기존 회원 초기등록 발급</h2>
+    <p>한 명의 회원 정보·인정 단급 및 이력·기준 수련기록만 일회성으로 발급하며 회원명부를 저장하지 않습니다.</p>
+    <label className="ghost full">기존 회원 초기등록 전자 증명서 JSON 검증·불러오기
       <input type="file" accept="application/json,.json" disabled={busy} onChange={event => event.target.files?.[0] && void loadPrevious(event.target.files[0])} />
     </label>
     <div className="credential-form">
@@ -161,23 +161,23 @@ export function OnboardingIssuer({ nativeAvailable }: { nativeAvailable: boolean
       <label><span>회원번호</span><input value={memberIdInput} onChange={event => setMemberIdInput(event.target.value)} /></label>
       <label><span>입회일</span><input type="date" value={joinedAt} onChange={event => setJoinedAt(event.target.value)} /></label>
       <label><span>인정일</span><input type="date" value={recognizedAt} onChange={event => setRecognizedAt(event.target.value)} /></label>
-      <label><span>baseline 기준일</span><input type="date" value={baselineAsOf} onChange={event => setBaselineAsOf(event.target.value)} /></label>
+      <label><span>기준 수련기록 기준일</span><input type="date" value={baselineAsOf} onChange={event => setBaselineAsOf(event.target.value)} /></label>
       <label><span>현재 단급</span><select value={rankType} onChange={event => setRankType(event.target.value as "kyu" | "dan")}><option value="kyu">급</option><option value="dan">단</option></select></label>
       <label><span>단급 값</span><input type="number" min="1" value={rankValue} onChange={event => setRankValue(Number(event.target.value))} /></label>
       <label><span>취득일(미상 가능)</span><input type="date" value={rankDate} onChange={event => setRankDate(event.target.value)} /></label>
-      <label><span>현급 session baseline(미상 가능)</span><input type="number" min="0" value={sessionBaseline} onChange={event => setSessionBaseline(event.target.value)} /></label>
+      <label><span>현급 기준 수련횟수(미상 가능)</span><input type="number" min="0" value={sessionBaseline} onChange={event => setSessionBaseline(event.target.value)} /></label>
     </div>
-    <label><span>이전 verified rank JSON 배열</span><textarea value={priorRanksJson} onChange={event => setPriorRanksJson(event.target.value)} /></label>
-    <label><span>Kata baseline JSON 배열</span><textarea value={kataBaselinesJson} onChange={event => setKataBaselinesJson(event.target.value)} /></label>
+    <label><span>이전 인정 단급 JSON 배열</span><textarea value={priorRanksJson} onChange={event => setPriorRanksJson(event.target.value)} /></label>
+    <label><span>카타별 기준 수련횟수 JSON 배열</span><textarea value={kataBaselinesJson} onChange={event => setKataBaselinesJson(event.target.value)} /></label>
     {payloadResult.error && <p className="credential-error">{payloadResult.error}</p>}
     <button className="primary large" type="button" disabled={!nativeAvailable || busy || !payloadResult.payload} onClick={issue}>
-      {mode === "new" ? "test-only onboarding 생성" : "correction revision 생성"}
+      {mode === "new" ? "테스트용 기존 회원 초기등록 전자 증명서 생성" : "정정 전자 증명서 생성"}
     </button>
-    {source && <button className="ghost full" type="button" disabled={!outputJson || busy} onClick={() => void renderResult(source, JSON.stringify(source))}>기존 JSON/link 그대로 reissue</button>}
+    {source && <button className="ghost full" type="button" disabled={!outputJson || busy} onClick={() => void renderResult(source, JSON.stringify(source))}>기존 JSON·링크 그대로 재전달</button>}
     <p role="status">{message}</p>
     {output && <dl className="credential-diagnostics"><div><dt>onboardingId</dt><dd>{output.signed.payload.onboardingId}</dd></div><div><dt>revision</dt><dd>{output.signed.payload.revision}</dd></div><div><dt>credentialId</dt><dd>{output.signed.credentialId}</dd></div></dl>}
-    {link && <><p className="credential-preview">{link}</p><button className="ghost full" type="button" onClick={() => navigator.clipboard.writeText(link)}>HTTPS link 복사</button></>}
-    {qr && <div className="credential-qr-output"><img src={qr} alt="member-onboarding HTTPS link QR" /><button className="ghost full" type="button" onClick={saveQr}>QR PNG 저장</button></div>}
+    {link && <><p className="credential-preview">{link}</p><button className="ghost full" type="button" onClick={() => navigator.clipboard.writeText(link)}>HTTPS 링크 복사</button></>}
+    {qr && <div className="credential-qr-output"><img src={qr} alt="기존 회원 초기등록 HTTPS 링크 QR" /><button className="ghost full" type="button" onClick={saveQr}>QR PNG 저장</button></div>}
     {outputJson && <pre className="credential-preview">{JSON.stringify(output, null, 2)}</pre>}
   </section>;
 }

@@ -1246,6 +1246,34 @@
 .bottom-nav { grid-template-columns: repeat(6,minmax(0,1fr)); }
 .bottom-nav button { min-width: 0; }
 .bottom-nav button span { font-size: .67rem; }
+
+.draft-reset { margin-top: 12px; }
+.journal-memo-card { display: flex; flex-direction: column; gap: 12px; }
+.journal-memo-card h3 { margin: 0; font-size: 1.05rem; }
+.journal-memo-card .note { margin: 0; overflow-wrap: anywhere; }
+.journal-memo-card .ghost { align-self: flex-start; }
+.scroll-controls {
+  position: fixed;
+  right: max(16px, calc((100vw - 760px) / 2 + 16px));
+  bottom: calc(132px + env(safe-area-inset-bottom));
+  z-index: 29;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.scroll-controls button {
+  border: 1px solid #a7c1b5;
+  border-radius: 999px;
+  padding: 9px 12px;
+  background: rgba(255, 255, 255, .96);
+  color: var(--green);
+  font-size: .76rem;
+  font-weight: 850;
+  box-shadow: 0 5px 18px rgba(20, 45, 34, .15);
+}
+@media (min-width: 700px) {
+  .scroll-controls { bottom: calc(152px + env(safe-area-inset-bottom)); }
+}
 .saved-kata-detail { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; padding:.35rem 0; }
 .saved-kata-detail strong { flex-basis:100%; }
 .log-card .saved-kata-detail span { float:none; }

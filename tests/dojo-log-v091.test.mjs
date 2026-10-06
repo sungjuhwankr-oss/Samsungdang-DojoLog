@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+const plannerDraft = await readFile(new URL("../app/planner-draft.ts", import.meta.url), "utf8");
+const scrollControls = await readFile(new URL("../app/scroll-controls.tsx", import.meta.url), "utf8");
 const recommendation = await readFile(new URL("../app/recommendation.ts", import.meta.url), "utf8");
 const videoLinks = await readFile(new URL("../app/video-links.ts", import.meta.url), "utf8");
 const version = await readFile(new URL("../app/version.ts", import.meta.url), "utf8");
@@ -28,10 +30,10 @@ test("uses the v0.9.1 visible brand consistently", () => {
 });
 
 test("uses local calendar fields and Saturday-only seven kata default", () => {
-  assert.match(page, /date\.getFullYear\(\)/);
-  assert.match(page, /date\.getMonth\(\)\+1/);
-  assert.match(page, /date\.getDate\(\)/);
-  assert.match(page, /getDay\(\)===6\?7:5/);
+  assert.match(plannerDraft, /date\.getFullYear\(\)/);
+  assert.match(plannerDraft, /date\.getMonth\(\)\+1/);
+  assert.match(plannerDraft, /date\.getDate\(\)/);
+  assert.match(plannerDraft, /getDay\(\)===6\?7:5/);
   assert.doesNotMatch(page, /toISOString\(\)\.slice\(0,10\)/);
 });
 
@@ -42,7 +44,7 @@ test("persists an intentionally empty log state after hydration", () => {
 
 test("preserves custom kata in the edit select", () => {
   assert.match(page, /optgroup label="현재 직접입력 카타"/);
-  assert.match(page, /<KataOptions current=\{kata\}\/>/);
+  assert.match(page, /<KataOptions current=\{kata\} replacement\/>/);
 });
 
 test("uses shared, state-preserving omote and ura video actions", async () => {
@@ -179,7 +181,8 @@ test("preserves an unconfirmed class plan across video navigation", () => {
 
 test("starts with no participant grade while restoring valid video-return selections", () => {
   assert.match(page, /useState<Grade\[\]>\(\[\]\)/);
-  assert.match(page, /setParticipants\(\[\]\)/);
+  assert.match(page, /setParticipants\(draft.participants\)/);
+  assert.match(plannerDraft, /participants:\[\] as Grade\[\]/);
   assert.doesNotMatch(page, /useState<Grade\[\]>\(\[9,7,5,2\]\)/);
   assert.match(page, /Array\.isArray\(draft\.participants\)\)setParticipants\(draft\.participants\)/);
 });
@@ -307,16 +310,14 @@ test("provides an anchored help table of contents and contextual return button",
   assert.match(extraCss, /bottom:\s*calc\(84px \+ env\(safe-area-inset-bottom\)\)/);
 });
 
-test("reuses the contextual floating return button across the four main menus", () => {
+test("provides common scroll controls and preserves the contextual help return button", () => {
+  assert.match(layout, /<ScrollControls \/>/);
+  assert.match(scrollControls, /맨 위 ↑/);
+  assert.match(scrollControls, /맨 아래 ↓/);
+  assert.match(scrollControls, /scrollDocument\(window,target/);
   assert.match(page, /function FloatingReturnButton/);
-  assert.match(page, /document\.documentElement\.scrollHeight>window\.innerHeight\+8/);
-  assert.match(page, /window\.scrollY>160/);
-  assert.match(page, /window\.addEventListener\("scroll",update,\{passive:true\}\)/);
-  assert.match(page, /tab!=="help"&&<FloatingReturnButton key=\{tab\}/);
-  assert.match(page, /label="맨 위 ↑"/);
-  assert.match(page, /window\.scrollTo\(\{top:0,behavior:"smooth"\}\)/);
   assert.match(page, /label="목차 ↑"/);
-  assert.match(extraCss, /\.menu-top-observer/);
+  assert.match(extraCss, /\.scroll-controls/);
 });
 
 test("uses balanced-first semantic radios without changing the grade mode contract", () => {

@@ -14,9 +14,16 @@ export function analysisExamSummary(katas:readonly Pick<Kata,'id'>[]){
 }
 export function filterJournal(logs:DojoLog[],mode:JournalMode,query:string):DojoLog[]{
   if(mode==='all')return logs;
-  if(mode==='memo')return logs.filter(log=>log.note.trim().length>0);
+  if(mode==='memo')return logs.filter(log=>log.note.trim().length>0).sort((a,b)=>b.date.localeCompare(a.date));
   if(!query.trim())return [];
   return logs.filter(log=>log.note.includes(query));
+}
+export function JournalMemoCard({log,onOriginal}:{log:DojoLog;onOriginal:(id:string)=>void}){
+  return <article className="panel journal-memo-card">
+    <h3>{log.date} {log.session?`· ${log.session}차`:'· 회차 미반영'}</h3>
+    <p className="note">{log.note}</p>
+    <button type="button" className="ghost" onClick={()=>onOriginal(log.id)}>원본 수업일지 보기</button>
+  </article>;
 }
 export function SavedKataDetails({kata,onOpen}:{kata:Kata;onOpen:(url:string)=>void}){
   const current=currentKataPresentation(kata),badge=examBadge(kata.id),actions=videoActions(current.links);

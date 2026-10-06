@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./extra.css";
 import "./add-panel.css";
+import {ScrollControls} from "./scroll-controls";
 
 export const metadata: Metadata = {
   title: "삼성당 DojoLog — 지도자",
@@ -22,7 +23,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">{children}<ScrollControls /></body>
     </html>
   );
 }

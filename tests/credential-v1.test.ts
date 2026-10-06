@@ -298,9 +298,9 @@ test("issuer UI keeps Membership disabled and adds stateless test-only Promotion
   assert.match(homePage, /href="\/credential-issuer\.html"/);
   assert.match(issuerPage, /테스트회원 \(실제 회원 아님\)/);
   assert.match(issuerPage, /memberId: "ASD-000"/);
-  assert.match(issuerPage, /실제 회원 Membership Credential 발급 — 운영 승인 전 비활성/);
+  assert.match(issuerPage, /실제 회원 전자 증명서 발급 — 운영 승인 전 비활성/);
   assert.match(issuerPage, /<button className="credential-production-disabled" type="button" disabled>/);
-  assert.match(issuerPage, /test-only Promotion Credential 생성/);
+  assert.match(issuerPage, /테스트용 승급·승단 전자 증명서 생성/);
   assert.match(issuerPage, /advance-one/);
   assert.match(issuerPage, /recognized-at-entry/);
   assert.doesNotMatch(issuerPage, /localStorage|indexedDB|deleteEntry/);
