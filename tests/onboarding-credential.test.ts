@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import QRCode from "qrcode";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 import catalog from "../reference/kata-catalog.v2.json";
+import { OnboardingIssuer } from "../app/credential-issuer/onboarding-issuer";
 import {
   calculateKeyId,
   decodeCanonicalBase64Url,
@@ -74,6 +77,34 @@ test("memberId number 0, string 0, and ASD-000 normalize to one canonical identi
   assert.equal(normalizeOnboardingMemberId("0"), "ASD-000");
   assert.equal(normalizeOnboardingMemberId("ASD-000"), "ASD-000");
   for (const value of ["", null, undefined]) assert.throws(() => normalizeOnboardingMemberId(value));
+});
+
+test("issuer builds the current-rank-only actual-device payload without a runtime reference error", () => {
+  const markup = renderToStaticMarkup(createElement(OnboardingIssuer, { nativeAvailable: true }));
+  assert.doesNotMatch(markup, /currentRankEntryId is not defined/);
+  assert.doesNotMatch(markup, /credential-error/);
+  assert.match(markup, /<button class="primary large" type="button">test-only onboarding 생성<\/button>/);
+
+  const currentEntryId = createOnboardingRankEntryId(new Uint8Array(16));
+  const value: MemberOnboardingPayload = {
+    onboardingId: id("on1_", "A"), revision: 1, supersedesCredentialId: null,
+    recognizedAt: "2026-10-06",
+    membership: { name: "테스트회원", memberId: normalizeOnboardingMemberId(0), joinedAt: "2015-12-06" },
+    recognizedRanks: [{ entryId: currentEntryId, rankType: "kyu", rankValue: 8, rankDate: null }],
+    currentRankEntryId: currentEntryId,
+    baselineAsOf: "2026-10-06",
+    currentRankSessionBaseline: null,
+    kataBaselines: []
+  };
+  assert.doesNotThrow(() => validateMemberOnboardingPayload(value));
+  assert.equal(value.membership.memberId, "ASD-000");
+  assert.equal(value.recognizedRanks.length, 1);
+  assert.deepEqual(value.recognizedRanks[0], {
+    entryId: currentEntryId, rankType: "kyu", rankValue: 8, rankDate: null
+  });
+  assert.equal(value.currentRankEntryId, value.recognizedRanks[0].entryId);
+  assert.equal(value.currentRankSessionBaseline, null);
+  assert.deepEqual(value.kataBaselines, []);
 });
 
 test("member-onboarding exact payload and JCS preserve rank, zero, unknown, and canonical Kata ids", () => {

@@ -67,7 +67,7 @@ export function OnboardingIssuer({ nativeAvailable }: { nativeAvailable: boolean
         recognizedAt,
         membership: { name, memberId, joinedAt },
         recognizedRanks: ranks,
-        currentRankEntryId,
+        currentRankEntryId: currentEntryId,
         baselineAsOf,
         currentRankSessionBaseline: sessionBaseline === "" ? null : Number(sessionBaseline),
         kataBaselines: JSON.parse(kataBaselinesJson) as KataBaseline[]
