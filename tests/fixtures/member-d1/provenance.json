@@ -1,0 +1,16 @@
+{
+  "repository": "sungjuhwankr-oss/Samsungdang-DojoLog-Member",
+  "commit": "53d76e0be401074d1d50f538f6d384beecea219e",
+  "sourcePaths": {
+    "session-share.mjs": "app/session-share.mjs",
+    "session-gzip-preflight.mjs": "app/session-gzip-preflight.mjs",
+    "session-share-v1-transport.json": "tests/fixtures/session-share-v1-transport.json",
+    "session-share.d.mts": "app/session-share.d.mts"
+  },
+  "sha256": {
+    "session-gzip-preflight.mjs": "437f0f0ea940aac31241d3466a7010f92d3211e897a67814cd3593a62f3e6eaa",
+    "session-share.mjs": "063ae20703145434b243a2714f44421d0db429e393afebc1f449808da1cc45d9",
+    "session-share-v1-transport.json": "e3c513c3314d6b9265d3353e4ac9cc75ae4147c8343e9d41163ece029459118c",
+    "session-share.d.mts": "c70f0d59cf825d589fb0c790d473f734f60ae11174245a180065c6fd91b3d451"
+  }
+}
