@@ -29,13 +29,13 @@ import {
 } from "../special-training-output";
 import { issuerFailure, koreanInputErrors } from "./presentation";
 
-type Props = { nativeAvailable: boolean; bootstrap: TrustedKeyBootstrap | null };
+type Props = { nativeAvailable: boolean; bootstrap: TrustedKeyBootstrap | null; keyReadiness?: "checking" | "ready" | "error" | "unsupported" };
 
 function firstSession(): SpecialTrainingSession {
   return { sessionId: generateSpecialTrainingSessionId(), date: "2026-10-24", label: "오전 수련" };
 }
 
-export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap }: Props) {
+export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap, keyReadiness = bootstrap ? "ready" : "checking" }: Props) {
   const [payload, setPayload] = useState<SpecialTrainingV2Payload>(() => ({
     eventId: "",
     revision: 1,
@@ -169,7 +169,7 @@ export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap }: Props) {
   };
 
   return <section className="panel credential-section">
-    <div className="credential-section-title"><QrCode /><div><span>6</span><h2>특별수련 전자 증명서 (Special-training Credential v2)</h2></div></div>
+    <div className="credential-section-title"><QrCode /><div><span>2</span><h2>특별수련 인증 발급</h2></div></div>
     <p>수련 회차 목록을 운영용 Android Keystore 키로 서명합니다. 회원번호와 회원명은 포함하지 않습니다.</p>
     <div className="credential-form credential-form-special">
       <label><span>행사명</span><input disabled={locked} value={payload.title} onChange={event => replacePayload({ title: event.target.value })} /></label>
@@ -192,6 +192,7 @@ export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap }: Props) {
     </div>)}
     <button className="ghost full" type="button" disabled={locked} onClick={() => replacePayload({ sessions: [...payload.sessions, { ...firstSession(), date: payload.startDate }] })}>수련 회차 추가</button>
     {presentedErrors.map(error => <div key={`${error.message}-${error.diagnostic ?? ""}`}><p className="credential-error">{error.message}</p>{error.diagnostic && <details className="credential-technical"><summary>기술 진단</summary><code>{error.diagnostic}</code></details>}</div>)}
+    {keyReadiness !== "ready" && <p className={keyReadiness === "checking" ? "credential-help" : "credential-error"}>{keyReadiness === "checking" ? "운영용 서명 키를 확인하는 중이므로 아직 발급할 수 없습니다." : keyReadiness === "unsupported" ? "Android 설치형 앱에서만 특별수련 인증을 발급할 수 있습니다." : "운영용 서명 키 확인에 실패하여 발급할 수 없습니다."}</p>}
     <button className="primary large" type="button" disabled={!nativeAvailable || !bootstrap || busy || locked || errors.length > 0} onClick={issue}>특별수련 전자 증명서 발급</button>
     <button className="ghost full" type="button" onClick={newEvent}><RefreshCw />새 행사 ID 생성</button>
     {credential && <button className="ghost full" type="button" onClick={prepareCorrection}>현재 발급본 기준 정정 발급 준비</button>}

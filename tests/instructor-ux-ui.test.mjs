@@ -44,13 +44,14 @@ test('reset button uses one confirmation, cancellation has no writes, confirmati
   }finally{if(original===undefined)delete globalThis.window;else globalThis.window=original}
 });
 
-test('issuer domain titles omit Credential while object/actions retain electronic-certificate meaning',async()=>{
+test('issuer operational titles use Korean task language while technical tools remain available',async()=>{
   const {default:Issuer}=await vite.ssrLoadModule('/app/credential-issuer/page.tsx');
   const html=render(Issuer);
   for(const title of ['회원 발급 테스트','승급·승단 발급 테스트','특별수련 발급 테스트','기존 회원 초기등록 발급','승급·승단 검증 결과','특별수련 검증·전달 결과']){
     assert.ok(html.includes(`<h2>${title}</h2>`));
   }
-  for(const text of ['전자 증명서 발급 기반 (Credential v1)','테스트용 회원 전자 증명서 생성','테스트용 승급·승단 전자 증명서 생성','테스트용 특별수련 전자 증명서 생성','테스트용 기존 회원 초기등록 전자 증명서 생성','특별수련 전자 증명서 (Special-training Credential v2)','전자 증명서 JSON 저장'])assert.ok(html.includes(text),text);
+  for(const text of ['회원·수련 인증 관리','기술 검증 도구','테스트용 회원 전자 증명서 생성','테스트용 승급·승단 전자 증명서 생성','테스트용 특별수련 전자 증명서 생성','기존 회원 초기등록 전자 증명서 발급','특별수련 인증 발급','전자 증명서 JSON 저장'])assert.ok(html.includes(text),text);
+  for(const legacy of ['Phase 4J-A · 개발 전용','전자 증명서 발급 기반 (Credential v1)'])assert.ok(!html.includes(legacy),legacy);
   assert.doesNotMatch(html,/Membership issuer|Promotion issuer|Special-training issuer|Existing-member onboarding issuer|전자 증명서을/);
   assert.match(html,/행사 ID가 올바르지 않습니다\. 새 행사 ID를 생성해 주세요\./);
   assert.doesNotMatch(html,/eventId must be|invalid title|invalid instructor|이전 인정 단급 JSON 배열|카타별 기준 수련횟수 JSON 배열/);

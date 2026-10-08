@@ -1,8 +1,7 @@
 "use client";
-/* eslint-disable @next/next/no-html-link-for-pages -- packaged static APK route */
 /* eslint-disable @next/next/no-img-element -- QR is a generated data URL */
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Award, Download, FileDown, KeyRound, QrCode, RefreshCw, ShieldCheck } from "lucide-react";
 
 import { saveBackupFile } from "../backup-file";
@@ -45,6 +44,7 @@ import {
 import { OnboardingIssuer } from "./onboarding-issuer";
 import { issuerFailure, koreanInputErrors } from "./presentation";
 import { SpecialTrainingV2Issuer } from "./special-training-v2-issuer";
+import { InstructorBottomNav } from "../instructor-bottom-nav";
 
 const TEST_FIXTURE: MembershipInput = {
   name: "테스트회원 (실제 회원 아님)",
@@ -60,7 +60,9 @@ const TEST_SPECIAL_TITLE = "Phase 4J 테스트 특별수련";
 const TEST_SPECIAL_INSTRUCTOR = "테스트 지도자";
 type PromotionKind = "advance-one" | "target" | "recognized-at-entry";
 
-export default function CredentialIssuerPage() {
+type KeyReadiness = "checking" | "ready" | "error" | "unsupported";
+
+export default function CredentialIssuerPage({ embedded = false }: { embedded?: boolean } = {}) {
   const nativeAvailable = useSyncExternalStore(
     () => () => undefined,
     hasNativeCredentialBridge,
@@ -101,6 +103,8 @@ export default function CredentialIssuerPage() {
   const [specialDiagnostics, setSpecialDiagnostics] = useState<Record<string, unknown> | null>(null);
   const [specialVerified, setSpecialVerified] = useState<boolean | null>(null);
   const [failureDiagnostic, setFailureDiagnostic] = useState<string | null>(null);
+  const [keyReadiness, setKeyReadiness] = useState<KeyReadiness>("checking");
+  const bootstrapAttempted = useRef(false);
 
   const errors = useMemo(() => membershipInputErrors(input), [input]);
   const presentedErrors = useMemo(() => koreanInputErrors(errors), [errors]);
@@ -147,6 +151,7 @@ export default function CredentialIssuerPage() {
   const presentedSpecialErrors = useMemo(() => koreanInputErrors(specialErrors), [specialErrors]);
   const exactSpecialTestFixture = specialTitle === TEST_SPECIAL_TITLE
     && specialInstructor === TEST_SPECIAL_INSTRUCTOR;
+  const effectiveKeyReadiness: KeyReadiness = nativeAvailable ? keyReadiness : "unsupported";
 
   function clearSpecialOutput() {
     setSpecialCredential(null);
@@ -163,6 +168,7 @@ export default function CredentialIssuerPage() {
   }
 
   async function provision() {
+    setKeyReadiness("checking");
     setBusy(true);
     setFailureDiagnostic(null);
     setMessage("Android Keystore 운영용 키를 확인하고 있습니다.");
@@ -172,15 +178,24 @@ export default function CredentialIssuerPage() {
       const parsed = parseTrustedKeyBootstrap(result.json);
       setBootstrap(parsed);
       setBootstrapJson(result.json);
+      setKeyReadiness("ready");
       setMessage(`운영용 키 ${parsed.generatedOrReused === "generated" ? "생성" : "재사용"}: ${parsed.keyId}`);
     } catch (error) {
       const presented = issuerFailure(error, "운영용 키 준비에 실패했습니다.");
       setMessage(presented.message);
       setFailureDiagnostic(presented.diagnostic);
+      setKeyReadiness("error");
     } finally {
       setBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (!nativeAvailable) return;
+    if (bootstrapAttempted.current) return;
+    bootstrapAttempted.current = true;
+    void provision();
+  }, [nativeAvailable]);
 
   async function issueFixture() {
     if (errors.length || !exactFixture) return;
@@ -333,18 +348,17 @@ export default function CredentialIssuerPage() {
   }
 
   return (
-    <main className="credential-shell">
+    <div className={`credential-shell${embedded ? " credential-shell-embedded" : ""}`}>
       <header className="credential-header">
-        <span className="eyebrow">Phase 4J-A · 개발 전용</span>
-        <h1>전자 증명서 발급 기반 (Credential v1)</h1>
-        <p>기존 회원·승급·승단 회귀검증과 테스트용 특별수련 전자 증명서 발급을 위한 개발 화면입니다.</p>
-        <a href="/">지도자용 앱으로 돌아가기</a>
+        <span className="eyebrow">관리</span>
+        <h1>회원·수련 인증 관리</h1>
+        <p>기존 회원 초기등록과 특별수련 인증을 운영용 서명 키로 발급합니다.</p>
       </header>
 
       <section className="panel credential-warning">
         <strong>안전 경계</strong>
         <p>이 화면은 회원명부를 저장하지 않으며, 입력값·발급 이력·개인키를 앱 데이터나 백업에 기록하지 않습니다.</p>
-        <p>현재 활성 서명 경로는 아래 고정 테스트 입력에만 열려 있습니다.</p>
+        <p>입력값과 발급 결과는 현재 열린 앱 화면의 메모리에만 유지됩니다.</p>
       </section>
 
       <section className="panel credential-section">
@@ -352,7 +366,7 @@ export default function CredentialIssuerPage() {
         <button className="primary large" type="button" disabled={!nativeAvailable || busy} onClick={provision}>
           운영용 서명 키 준비·조회
         </button>
-        {!nativeAvailable && <p className="credential-error">Android 설치형 앱에서만 사용할 수 있습니다.</p>}
+        <p className={effectiveKeyReadiness === "error" || effectiveKeyReadiness === "unsupported" ? "credential-error" : "credential-status"} role="status">{effectiveKeyReadiness === "checking" ? "운영용 서명 키를 확인하는 중입니다." : effectiveKeyReadiness === "ready" ? "운영용 서명 키 준비가 완료되었습니다." : effectiveKeyReadiness === "error" ? "운영용 서명 키를 확인하지 못했습니다. 다시 확인하십시오." : "Android 설치형 앱에서만 운영용 서명 키를 사용할 수 있습니다."}</p>
         {bootstrap && <dl className="credential-diagnostics">
           <div><dt>서명 키 ID (keyId)</dt><dd>{bootstrap.keyId}</dd></div>
           <div><dt>상태</dt><dd>{bootstrap.generatedOrReused === "generated" ? "생성" : "재사용"}</dd></div>
@@ -364,6 +378,10 @@ export default function CredentialIssuerPage() {
           <FileDown />신뢰 키 초기설정 JSON 저장
         </button>
       </section>
+
+      <details className="credential-legacy-tools">
+        <summary>기술 검증 도구</summary>
+        <div className="credential-legacy-tools-body">
 
       <section className="panel credential-section">
         <div className="credential-section-title"><ShieldCheck /><div><span>2</span><h2>회원 발급 테스트</h2></div></div>
@@ -508,8 +526,12 @@ export default function CredentialIssuerPage() {
         </button>
       </section>
 
-      <OnboardingIssuer nativeAvailable={nativeAvailable} />
-      <SpecialTrainingV2Issuer nativeAvailable={nativeAvailable} bootstrap={bootstrap} />
-    </main>
+        </div>
+      </details>
+
+      <OnboardingIssuer nativeAvailable={nativeAvailable} issuerReady={effectiveKeyReadiness === "ready"} />
+      <SpecialTrainingV2Issuer nativeAvailable={nativeAvailable} bootstrap={bootstrap} keyReadiness={effectiveKeyReadiness} />
+      {!embedded && <InstructorBottomNav active="manage" />}
+    </div>
   );
 }

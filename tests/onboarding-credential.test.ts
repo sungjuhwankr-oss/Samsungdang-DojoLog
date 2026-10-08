@@ -83,7 +83,7 @@ test("issuer builds the current-rank-only actual-device payload without a runtim
   const markup = renderToStaticMarkup(createElement(OnboardingIssuer, { nativeAvailable: true }));
   assert.doesNotMatch(markup, /currentRankEntryId is not defined/);
   assert.doesNotMatch(markup, /credential-error/);
-  assert.match(markup, /<button class="primary large" type="button">테스트용 기존 회원 초기등록 전자 증명서 생성<\/button>/);
+  assert.match(markup, /<button class="primary large" type="button">기존 회원 초기등록 전자 증명서 발급<\/button>/);
 
   const currentEntryId = createOnboardingRankEntryId(new Uint8Array(16));
   const value: MemberOnboardingPayload = {

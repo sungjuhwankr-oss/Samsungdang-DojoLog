@@ -1,8 +1,10 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { ChevronDown, ChevronUp, FileDown, FileUp } from "lucide-react";
 
+import { saveBackupFile } from "../backup-file";
 import { savePngImage } from "../session-share-file";
 import { provisionProductionCredentialKey, issueNativeMemberOnboardingCredential } from "../credential-native";
 import { parseTrustedKeyBootstrap } from "../credential-v1";
@@ -38,7 +40,7 @@ function koreaToday(): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-export function OnboardingIssuer({ nativeAvailable }: { nativeAvailable: boolean }) {
+export function OnboardingIssuer({ nativeAvailable, issuerReady = true }: { nativeAvailable: boolean; issuerReady?: boolean }) {
   const today = koreaToday();
   const [name, setName] = useState("테스트회원 (실제 회원 아님)");
   const [memberIdInput, setMemberIdInput] = useState("0");
@@ -61,6 +63,9 @@ export function OnboardingIssuer({ nativeAvailable }: { nativeAvailable: boolean
   const [message, setMessage] = useState("신규 발급 또는 검증된 이전 JSON의 정정 발급을 준비합니다.");
   const [technicalDiagnostic, setTechnicalDiagnostic] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [selectedFilename, setSelectedFilename] = useState("선택된 파일 없음");
+  const [resultOpen, setResultOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const mode = source ? "correction" : "new";
   const payloadResult = useMemo(() => {
@@ -97,6 +102,7 @@ export function OnboardingIssuer({ nativeAvailable }: { nativeAvailable: boolean
     setOutputJson(json);
     setLink(productionLink);
     setQr(await createOnboardingQrDataUrl(productionLink));
+    setResultOpen(true);
   }
 
   async function issue() {
@@ -121,6 +127,7 @@ export function OnboardingIssuer({ nativeAvailable }: { nativeAvailable: boolean
   }
 
   async function loadPrevious(file: File) {
+    setSelectedFilename(file.name);
     setBusy(true);
     setTechnicalDiagnostic(null);
     try {
@@ -169,6 +176,13 @@ export function OnboardingIssuer({ nativeAvailable }: { nativeAvailable: boolean
     }
   }
 
+  async function saveJson() {
+    if (!outputJson) return;
+    const filename = "Samsungdang-DojoLog-member-onboarding-credential-v1.json";
+    const result = await saveBackupFile(filename, `${JSON.stringify(JSON.parse(outputJson), null, 2)}\n`);
+    if (result === "saved") setMessage(`${filename} 파일을 저장했습니다.`);
+  }
+
   function addPreviousRank() {
     setPreviousRanks(rows => [...rows, createPreviousRankRow()]);
   }
@@ -183,9 +197,12 @@ export function OnboardingIssuer({ nativeAvailable }: { nativeAvailable: boolean
   return <section className="panel credential-section">
     <h2>기존 회원 초기등록 발급</h2>
     <p>한 명의 회원 정보·인정 단급 및 이력·기준 수련기록만 일회성으로 발급하며 회원명부를 저장하지 않습니다.</p>
-    <label className="ghost full">기존 회원 초기등록 전자 증명서 JSON 검증·불러오기
-      <input type="file" accept="application/json,.json" disabled={busy} onChange={event => event.target.files?.[0] && void loadPrevious(event.target.files[0])} />
-    </label>
+    <div className="credential-file-import">
+      <div><strong>기존 회원 초기등록 전자 증명서 JSON 검증·불러오기</strong><p>저장한 JSON 파일을 선택하면 서명을 검증하고 정정 발급 입력을 준비합니다.</p></div>
+      <input ref={fileInputRef} className="visually-hidden" type="file" accept="application/json,.json" disabled={busy} onChange={event => event.target.files?.[0] && void loadPrevious(event.target.files[0])} />
+      <button className="ghost" type="button" disabled={busy} onClick={() => fileInputRef.current?.click()}><FileUp />JSON 파일 선택</button>
+      <span className="credential-selected-file">{selectedFilename}</span>
+    </div>
     <div className="credential-form">
       <label><span>성명</span><input value={name} onChange={event => setName(event.target.value)} /></label>
       <label><span>회원번호</span><input value={memberIdInput} onChange={event => setMemberIdInput(event.target.value)} /></label>
@@ -230,19 +247,21 @@ export function OnboardingIssuer({ nativeAvailable }: { nativeAvailable: boolean
       <p className="credential-error">{payloadResult.issue.message}</p>
       {payloadResult.issue.diagnostic && <details className="credential-technical"><summary>기술 진단</summary><code>{payloadResult.issue.diagnostic}</code></details>}
     </>}
-    <button className="primary large" type="button" disabled={!nativeAvailable || busy || !payloadResult.payload} onClick={issue}>
-      {mode === "new" ? "테스트용 기존 회원 초기등록 전자 증명서 생성" : "정정 전자 증명서 생성"}
+    <button className="primary large" type="button" disabled={!nativeAvailable || !issuerReady || busy || !payloadResult.payload} onClick={issue}>
+      {mode === "new" ? "기존 회원 초기등록 전자 증명서 발급" : "정정 전자 증명서 발급"}
     </button>
+    {!issuerReady && <p className="credential-help">운영용 서명 키 준비가 완료되면 발급할 수 있습니다.</p>}
     {source && <button className="ghost full" type="button" disabled={!outputJson || busy} onClick={() => void renderResult(source, JSON.stringify(source))}>기존 JSON·링크 그대로 재전달</button>}
     <p role="status">{message}</p>
     {technicalDiagnostic && <details className="credential-technical"><summary>기술 진단</summary><code>{technicalDiagnostic}</code></details>}
-    {output && <details className="credential-technical"><summary>자동 생성 기술 정보</summary><dl className="credential-diagnostics">
+    {output && <section className="credential-result" aria-label="기존 회원 초기등록 발급 결과"><button className="credential-result-toggle" type="button" aria-expanded={resultOpen} onClick={() => setResultOpen(open => !open)}>{resultOpen ? <ChevronUp /> : <ChevronDown />}{resultOpen ? "발급 결과 접기" : "발급 결과 펼치기"}</button>{resultOpen && <div className="credential-result-body"><details className="credential-technical"><summary>자동 생성 기술 정보</summary><dl className="credential-diagnostics">
       <div><dt>초기등록 ID (onboardingId)</dt><dd>{output.signed.payload.onboardingId}</dd></div>
       <div><dt>정정 차수 (revision)</dt><dd>{output.signed.payload.revision}</dd></div>
       <div><dt>전자 증명서 ID (credentialId)</dt><dd>{output.signed.credentialId}</dd></div>
-    </dl><p>위 식별자는 자동 생성되므로 직접 입력할 필요가 없습니다.</p></details>}
+    </dl><p>위 식별자는 자동 생성되므로 직접 입력할 필요가 없습니다.</p></details>
     {link && <><p className="credential-preview">{link}</p><button className="ghost full" type="button" onClick={() => navigator.clipboard.writeText(link)}>HTTPS 링크 복사</button></>}
     {qr && <div className="credential-qr-output"><img src={qr} alt="기존 회원 초기등록 HTTPS 링크 QR" /><button className="ghost full" type="button" onClick={saveQr}>QR PNG 저장</button></div>}
-    {outputJson && <details className="credential-technical"><summary>서명된 JSON 기술 상세</summary><pre className="credential-preview">{JSON.stringify(output, null, 2)}</pre></details>}
+    {outputJson && <><button className="ghost full" type="button" onClick={saveJson}><FileDown />현재 기존 회원 초기등록 전자 증명서 JSON 저장</button><details className="credential-technical"><summary>서명된 JSON 기술 상세</summary><pre className="credential-preview">{JSON.stringify(output, null, 2)}</pre></details></>}
+    </div>}</section>}
   </section>;
 }

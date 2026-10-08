@@ -204,7 +204,7 @@ test("places the manual dan condition with participant grades and keeps two spec
 });
 
 test("resets the journal and reference views to the window top on every activation", () => {
-  assert.match(page, /SCROLL_RESET_TABS:Tab\[\]=\["logs","hombu","exam","beginner","help"\]/);
+  assert.match(page, /SCROLL_RESET_TABS:Tab\[\]=\["logs","hombu","exam","beginner","manage"\]/);
   assert.match(page, /useEffect\(\(\)=>\{if\(SCROLL_RESET_TABS\.includes\(tab\)\)window\.scrollTo\(0,0\)\},\[tab\]\)/);
   assert.match(page, /SCROLL_RESET_TABS\.includes\(saved\.tab\)\?0:Number\(saved\.scrollY\)\|\|0/);
   assert.doesNotMatch(page, /SCROLL_RESET_TABS:Tab\[\]=\[[^\]]*"today"/);
@@ -295,8 +295,8 @@ test("marks the v0.9.9 bundle and invalidates only owned stale service-worker ca
 });
 
 test("provides an anchored help table of contents and contextual return button", () => {
-  const ids = ["help-background","help-quick-start","help-grade-selection","help-grade-mode","help-review-preview","help-recommendation","help-balance","help-technique-flow","help-representative-kata","help-editing","help-log","help-reference","help-backup","help-changelog"];
-  assert.equal(new Set(ids).size, 14);
+  const ids = ["help-background","help-quick-start","help-grade-selection","help-grade-mode","help-review-preview","help-recommendation","help-balance","help-technique-flow","help-representative-kata","help-editing","help-log","help-reference","help-changelog"];
+  assert.equal(new Set(ids).size, 13);
   for (const id of ids) {
     assert.match(page, new RegExp(`id:\"${id}\"`));
     assert.match(page, new RegExp(`id=\"${id}\"`));
