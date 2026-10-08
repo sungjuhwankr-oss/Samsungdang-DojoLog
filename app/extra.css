@@ -418,6 +418,68 @@
 .credential-form-special {
   grid-template-columns: 1fr 1.4fr 1fr;
 }
+.credential-help,
+.credential-technical p,
+.credential-repeat-list p {
+  margin: 0;
+  color: var(--muted);
+  font-size: .76rem;
+  line-height: 1.55;
+}
+.credential-repeat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #f8faf9;
+}
+.credential-repeat-list h3 {
+  margin: 0 0 4px;
+  font-size: .95rem;
+}
+.credential-repeat-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+.credential-form-baseline {
+  grid-template-columns: minmax(0, 2fr) 1fr auto;
+}
+.credential-inline-toggle {
+  align-self: end;
+  flex-direction: row !important;
+  align-items: center;
+  min-height: 42px;
+  white-space: nowrap;
+}
+.credential-inline-toggle input {
+  width: auto !important;
+}
+.credential-technical {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 11px;
+  background: #f5f7f6;
+}
+.credential-technical summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 800;
+}
+.credential-technical > :not(summary) {
+  margin-top: 10px;
+}
+.credential-technical code {
+  overflow-wrap: anywhere;
+  font-size: .72rem;
+}
 .credential-qr-output {
   display: flex;
   flex-direction: column;

@@ -52,6 +52,8 @@ test('issuer domain titles omit Credential while object/actions retain electroni
   }
   for(const text of ['전자 증명서 발급 기반 (Credential v1)','테스트용 회원 전자 증명서 생성','테스트용 승급·승단 전자 증명서 생성','테스트용 특별수련 전자 증명서 생성','테스트용 기존 회원 초기등록 전자 증명서 생성','특별수련 전자 증명서 (Special-training Credential v2)','전자 증명서 JSON 저장'])assert.ok(html.includes(text),text);
   assert.doesNotMatch(html,/Membership issuer|Promotion issuer|Special-training issuer|Existing-member onboarding issuer|전자 증명서을/);
+  assert.match(html,/행사 ID가 올바르지 않습니다\. 새 행사 ID를 생성해 주세요\./);
+  assert.doesNotMatch(html,/eventId must be|invalid title|invalid instructor|이전 인정 단급 JSON 배열|카타별 기준 수련횟수 JSON 배열/);
 });
 
 test('translated option labels preserve exact internal enum values and JSON field identifiers',async()=>{
@@ -61,15 +63,21 @@ test('translated option labels preserve exact internal enum values and JSON fiel
     assert.match(html,new RegExp(`<option value="${value}"(?: selected="")?>${label}</option>`));
   }
   for(const value of ['advance-one','target','recognized-at-entry','kyu','dan'])assert.ok(html.includes(`value="${value}"`));
-  for(const id of ['eventId','supersedesCredentialId','sessionId'])assert.ok(html.includes(`<span>${id}</span>`));
   const onboarding=await source('../app/credential-issuer/onboarding-issuer.tsx');
+  const issuer=await source('../app/credential-issuer/page.tsx');
+  const special=await source('../app/credential-issuer/special-training-v2-issuer.tsx');
+  const issuerSources=`${issuer}\n${onboarding}\n${special}`;
+  for(const label of ['행사 ID (eventId)','전자 증명서 ID (credentialId)','수련 회차 ID (sessionId)','초기등록 ID (onboardingId)','서명 키 ID (keyId)','정정 차수 (revision)','이전 전자 증명서 ID','서명 방식'])assert.ok(issuerSources.includes(label),label);
   assert.match(onboarding,/setSource\(credential\)/);
   assert.match(onboarding,/validateMemberOnboardingCorrection\(source, payload\)/);
   assert.match(onboarding,/issueNativeMemberOnboardingCredential\(payloadResult.payload\)/);
-  const special=await source('../app/credential-issuer/special-training-v2-issuer.tsx');
   assert.match(special,/saveBackupFile\("Samsungdang-DojoLog-special-training-v2.json", credentialJson\)/);
   assert.match(special,/전자 증명서 JSON 저장/);
-  assert.match(onboarding,/JSON.stringify\(payload.recognizedRanks/);
+  assert.doesNotMatch(onboarding,/priorRanksJson|kataBaselinesJson|이전 인정 단급 JSON 배열|카타별 기준 수련횟수 JSON 배열/);
+  assert.match(onboarding,/이전 인정 단급 추가/);
+  assert.match(onboarding,/카타 기준 수련횟수 추가/);
+  assert.match(onboarding,/setPreviousRanks\(payload.recognizedRanks.slice\(0, -1\)\)/);
+  assert.match(onboarding,/setCurrentRankEntryId\(current.entryId\)/);
 });
 
 test('scroll controls show correct positions and click handlers perform scroll-only operations',async()=>{

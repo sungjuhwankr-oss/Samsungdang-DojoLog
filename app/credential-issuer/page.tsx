@@ -43,6 +43,7 @@ import {
   downloadSpecialTrainingQrPng
 } from "../special-training-output";
 import { OnboardingIssuer } from "./onboarding-issuer";
+import { issuerFailure, koreanInputErrors } from "./presentation";
 import { SpecialTrainingV2Issuer } from "./special-training-v2-issuer";
 
 const TEST_FIXTURE: MembershipInput = {
@@ -99,8 +100,10 @@ export default function CredentialIssuerPage() {
   const [specialQrDataUrl, setSpecialQrDataUrl] = useState("");
   const [specialDiagnostics, setSpecialDiagnostics] = useState<Record<string, unknown> | null>(null);
   const [specialVerified, setSpecialVerified] = useState<boolean | null>(null);
+  const [failureDiagnostic, setFailureDiagnostic] = useState<string | null>(null);
 
   const errors = useMemo(() => membershipInputErrors(input), [input]);
+  const presentedErrors = useMemo(() => koreanInputErrors(errors), [errors]);
   const exactFixture = input.name === TEST_FIXTURE.name
     && input.memberId === TEST_FIXTURE.memberId
     && input.joinedAt === TEST_FIXTURE.joinedAt;
@@ -126,6 +129,7 @@ export default function CredentialIssuerPage() {
     };
   }, [examDate, promotionKind, rankDate, rankType, rankValue, recognizedAt, recognizedMemberId]);
   const promotionErrors = useMemo(() => promotionInputErrors(promotionPayload), [promotionPayload]);
+  const presentedPromotionErrors = useMemo(() => koreanInputErrors(promotionErrors), [promotionErrors]);
   const promotionFilename = promotionKind === "advance-one"
     ? "Samsungdang-DojoLog-promotion-advance-one-test-credential-v1.json"
     : promotionKind === "target"
@@ -140,6 +144,7 @@ export default function CredentialIssuerPage() {
     instructor: specialInstructor
   }), [specialCategory, specialEndDate, specialEventId, specialInstructor, specialStartDate, specialTitle]);
   const specialErrors = useMemo(() => specialTrainingInputErrors(specialPayload), [specialPayload]);
+  const presentedSpecialErrors = useMemo(() => koreanInputErrors(specialErrors), [specialErrors]);
   const exactSpecialTestFixture = specialTitle === TEST_SPECIAL_TITLE
     && specialInstructor === TEST_SPECIAL_INSTRUCTOR;
 
@@ -159,6 +164,7 @@ export default function CredentialIssuerPage() {
 
   async function provision() {
     setBusy(true);
+    setFailureDiagnostic(null);
     setMessage("Android Keystore 운영용 키를 확인하고 있습니다.");
     try {
       const result = await provisionProductionCredentialKey();
@@ -168,7 +174,9 @@ export default function CredentialIssuerPage() {
       setBootstrapJson(result.json);
       setMessage(`운영용 키 ${parsed.generatedOrReused === "generated" ? "생성" : "재사용"}: ${parsed.keyId}`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "운영용 키 준비에 실패했습니다.");
+      const presented = issuerFailure(error, "운영용 키 준비에 실패했습니다.");
+      setMessage(presented.message);
+      setFailureDiagnostic(presented.diagnostic);
     } finally {
       setBusy(false);
     }
@@ -177,6 +185,7 @@ export default function CredentialIssuerPage() {
   async function issueFixture() {
     if (errors.length || !exactFixture) return;
     setBusy(true);
+    setFailureDiagnostic(null);
     setSelfVerified(null);
     setMessage("고정 테스트용 회원 전자 증명서를 생성하고 있습니다.");
     try {
@@ -202,7 +211,9 @@ export default function CredentialIssuerPage() {
       setTransportToken("");
       setDiagnostics(null);
       setSelfVerified(false);
-      setMessage(error instanceof Error ? error.message : "테스트용 전자 증명서 생성에 실패했습니다.");
+      const presented = issuerFailure(error, "테스트용 전자 증명서 생성에 실패했습니다.");
+      setMessage(presented.message);
+      setFailureDiagnostic(presented.diagnostic);
     } finally {
       setBusy(false);
     }
@@ -211,6 +222,7 @@ export default function CredentialIssuerPage() {
   async function issuePromotionFixture() {
     if (promotionErrors.length) return;
     setBusy(true);
+    setFailureDiagnostic(null);
     setPromotionVerified(null);
     setMessage("테스트용 승급·승단 전자 증명서를 생성하고 있습니다.");
     try {
@@ -238,7 +250,9 @@ export default function CredentialIssuerPage() {
       setPromotionToken("");
       setPromotionDiagnostics(null);
       setPromotionVerified(false);
-      setMessage(error instanceof Error ? error.message : "승급·승단 전자 증명서 생성에 실패했습니다.");
+      const presented = issuerFailure(error, "승급·승단 전자 증명서 생성에 실패했습니다.");
+      setMessage(presented.message);
+      setFailureDiagnostic(presented.diagnostic);
     } finally {
       setBusy(false);
     }
@@ -247,6 +261,7 @@ export default function CredentialIssuerPage() {
   async function issueSpecialTrainingFixture() {
     if (specialErrors.length || !exactSpecialTestFixture) return;
     setBusy(true);
+    setFailureDiagnostic(null);
     setSpecialVerified(null);
     setMessage("테스트용 특별수련 전자 증명서를 생성하고 있습니다.");
     try {
@@ -286,7 +301,9 @@ export default function CredentialIssuerPage() {
     } catch (error) {
       clearSpecialOutput();
       setSpecialVerified(false);
-      setMessage(error instanceof Error ? error.message : "특별수련 전자 증명서 생성에 실패했습니다.");
+      const presented = issuerFailure(error, "특별수련 전자 증명서 생성에 실패했습니다.");
+      setMessage(presented.message);
+      setFailureDiagnostic(presented.diagnostic);
     } finally {
       setBusy(false);
     }
@@ -337,11 +354,12 @@ export default function CredentialIssuerPage() {
         </button>
         {!nativeAvailable && <p className="credential-error">Android 설치형 앱에서만 사용할 수 있습니다.</p>}
         {bootstrap && <dl className="credential-diagnostics">
-          <div><dt>keyId</dt><dd>{bootstrap.keyId}</dd></div>
+          <div><dt>서명 키 ID (keyId)</dt><dd>{bootstrap.keyId}</dd></div>
           <div><dt>상태</dt><dd>{bootstrap.generatedOrReused === "generated" ? "생성" : "재사용"}</dd></div>
           <div><dt>공개키</dt><dd>{bootstrap.publicKeyByteLength} bytes · {bootstrap.publicKeyFormat}</dd></div>
           <div><dt>개인키</dt><dd>getEncoded() == null</dd></div>
         </dl>}
+        {bootstrap && <p className="credential-help">서명 키 ID는 자동으로 조회되므로 직접 입력할 필요가 없습니다.</p>}
         <button className="ghost full" type="button" disabled={!bootstrapJson || busy} onClick={() => exportJson(BOOTSTRAP_FILENAME, bootstrapJson)}>
           <FileDown />신뢰 키 초기설정 JSON 저장
         </button>
@@ -354,7 +372,7 @@ export default function CredentialIssuerPage() {
           <label><span>회원번호</span><input value={input.memberId} onChange={event => setInput({ ...input, memberId: event.target.value })} /></label>
           <label><span>입회일</span><input type="date" value={input.joinedAt} onChange={event => setInput({ ...input, joinedAt: event.target.value })} /></label>
         </div>
-        {errors.map(error => <p className="credential-error" key={error}>{error}</p>)}
+        {presentedErrors.map(error => <div key={`${error.message}-${error.diagnostic ?? ""}`}><p className="credential-error">{error.message}</p>{error.diagnostic && <details className="credential-technical"><summary>기술 진단</summary><code>{error.diagnostic}</code></details>}</div>)}
         {!exactFixture && <p className="credential-error">Phase 4H-A에서는 고정 테스트 입력만 서명할 수 있습니다.</p>}
         <button className="primary large" type="button" disabled={!nativeAvailable || busy || errors.length > 0 || !exactFixture} onClick={issueFixture}>
           테스트용 회원 전자 증명서 생성
@@ -387,7 +405,7 @@ export default function CredentialIssuerPage() {
             <label><span>목표 단급 값</span><input type="number" min="1" max={rankType === "kyu" ? 9 : undefined} value={rankValue} onChange={event => setRankValue(Number(event.target.value))} /></label>
           </>}
         </div>
-        {promotionErrors.map(error => <p className="credential-error" key={error}>{error}</p>)}
+        {presentedPromotionErrors.map(error => <div key={`${error.message}-${error.diagnostic ?? ""}`}><p className="credential-error">{error.message}</p>{error.diagnostic && <details className="credential-technical"><summary>기술 진단</summary><code>{error.diagnostic}</code></details>}</div>)}
         <button className="primary large" type="button" disabled={!nativeAvailable || busy || promotionErrors.length > 0} onClick={issuePromotionFixture}>
           테스트용 승급·승단 전자 증명서 생성
         </button>
@@ -395,9 +413,8 @@ export default function CredentialIssuerPage() {
 
       <section className="panel credential-section">
         <div className="credential-section-title"><QrCode /><div><span>4</span><h2>특별수련 발급 테스트</h2></div></div>
-        <p>eventId는 이 화면을 유지한 재발급에서 그대로 사용되며 credentialId만 새로 생성됩니다.</p>
+        <p>행사 ID는 같은 행사의 재발급에서 유지되고, 전자 증명서 ID만 새로 생성됩니다.</p>
         <div className="credential-form credential-form-special">
-          <label><span>eventId</span><input value={specialEventId} readOnly /></label>
           <label><span>행사명</span><input value={specialTitle} onChange={event => { clearSpecialOutput(); setSpecialTitle(event.target.value); }} /></label>
           <label><span>행사 종류</span><select value={specialCategory} onChange={event => { clearSpecialOutput(); setSpecialCategory(event.target.value as SpecialTrainingCategory); }}>
             <option value="seminar">세미나</option>
@@ -410,10 +427,14 @@ export default function CredentialIssuerPage() {
           <label><span>종료일 (단일일이면 비움)</span><input type="date" value={specialEndDate} onChange={event => { clearSpecialOutput(); setSpecialEndDate(event.target.value); }} /></label>
           <label><span>지도자</span><input value={specialInstructor} onChange={event => { clearSpecialOutput(); setSpecialInstructor(event.target.value); }} /></label>
         </div>
+        <details className="credential-technical"><summary>자동 생성 기술 정보</summary>
+          <label><span>행사 ID (eventId)</span><input value={specialEventId} readOnly /></label>
+          <p>행사 ID는 자동 생성되므로 직접 입력할 필요가 없습니다.</p>
+        </details>
         <button className="ghost full" type="button" disabled={busy} onClick={newSpecialEventId}>
-          <RefreshCw />새 테스트 eventId 생성
+          <RefreshCw />새 테스트 행사 ID 생성
         </button>
-        {specialErrors.map(error => <p className="credential-error" key={error}>{error}</p>)}
+        {presentedSpecialErrors.map(error => <div key={`${error.message}-${error.diagnostic ?? ""}`}><p className="credential-error">{error.message}</p>{error.diagnostic && <details className="credential-technical"><summary>기술 진단</summary><code>{error.diagnostic}</code></details>}</div>)}
         {!exactSpecialTestFixture && <p className="credential-error">Phase 4J-A에서는 고정 테스트용 행사명과 지도자만 서명할 수 있습니다.</p>}
         <button className="primary large" type="button" disabled={!nativeAvailable || busy || specialErrors.length > 0 || !exactSpecialTestFixture} onClick={issueSpecialTrainingFixture}>
           테스트용 특별수련 전자 증명서 생성
@@ -426,17 +447,18 @@ export default function CredentialIssuerPage() {
       <section className="panel credential-section" aria-live="polite">
         <h2>전자 증명서 검증 결과</h2>
         <p className={selfVerified === false ? "credential-error" : "credential-status"}>{message}</p>
+        {failureDiagnostic && <details className="credential-technical"><summary>기술 진단</summary><code>{failureDiagnostic}</code></details>}
         {credential && <dl className="credential-diagnostics">
-          <div><dt>credentialId</dt><dd>{credential.signed.credentialId}</dd></div>
-          <div><dt>keyId</dt><dd>{credential.signed.keyId}</dd></div>
-          <div><dt>issuedAt</dt><dd>{credential.signed.issuedAt}</dd></div>
-          <div><dt>signature</dt><dd>64-byte r||s · unpadded base64url</dd></div>
+          <div><dt>전자 증명서 ID (credentialId)</dt><dd>{credential.signed.credentialId}</dd></div>
+          <div><dt>서명 키 ID (keyId)</dt><dd>{credential.signed.keyId}</dd></div>
+          <div><dt>발급 시각 (issuedAt)</dt><dd>{credential.signed.issuedAt}</dd></div>
+          <div><dt>서명 방식</dt><dd>64-byte r||s · unpadded base64url</dd></div>
           <div><dt>전자 증명서 자체 검증</dt><dd>{selfVerified ? "PASS" : "미검증"}</dd></div>
-          <div><dt>transport token</dt><dd>{transportToken.length} characters</dd></div>
-          <div><dt>HTTPS route</dt><dd>Phase 4H-B에서 주입·확정</dd></div>
+          <div><dt>전달 토큰</dt><dd>{transportToken.length} characters</dd></div>
+          <div><dt>HTTPS 경로</dt><dd>Phase 4H-B에서 주입·확정</dd></div>
         </dl>}
-        {diagnostics && <pre className="credential-preview">{JSON.stringify(diagnostics, null, 2)}</pre>}
-        {credentialJson && <pre className="credential-preview">{JSON.stringify(credential, null, 2)}</pre>}
+        {diagnostics && <details className="credential-technical"><summary>Native 기술 진단</summary><pre className="credential-preview">{JSON.stringify(diagnostics, null, 2)}</pre></details>}
+        {credentialJson && <details className="credential-technical"><summary>서명된 JSON 기술 상세</summary><pre className="credential-preview">{JSON.stringify(credential, null, 2)}</pre></details>}
         <button className="ghost full" type="button" disabled={!credentialJson || busy} onClick={() => exportJson(CREDENTIAL_FILENAME, credentialJson)}>
           <FileDown />샘플 회원 전자 증명서 JSON 저장 (Membership Credential v1)
         </button>
@@ -446,16 +468,16 @@ export default function CredentialIssuerPage() {
         <h2>승급·승단 검증 결과</h2>
         {promotionCredential && <dl className="credential-diagnostics">
           <div><dt>종류</dt><dd>{promotionCredential.signed.payload.eventType === "promoted" ? "승급·승단" : "입회·이적 시 인정"} / {promotionCredential.signed.payload.mode === "advance-one" ? "일반 심사 +1" : "목표 지정"}</dd></div>
-          <div><dt>credentialId</dt><dd>{promotionCredential.signed.credentialId}</dd></div>
-          <div><dt>keyId</dt><dd>{promotionCredential.signed.keyId}</dd></div>
-          <div><dt>issuedAt</dt><dd>{promotionCredential.signed.issuedAt}</dd></div>
-          <div><dt>signature</dt><dd>64-byte r||s · unpadded base64url</dd></div>
+          <div><dt>전자 증명서 ID (credentialId)</dt><dd>{promotionCredential.signed.credentialId}</dd></div>
+          <div><dt>서명 키 ID (keyId)</dt><dd>{promotionCredential.signed.keyId}</dd></div>
+          <div><dt>발급 시각 (issuedAt)</dt><dd>{promotionCredential.signed.issuedAt}</dd></div>
+          <div><dt>서명 방식</dt><dd>64-byte r||s · unpadded base64url</dd></div>
           <div><dt>전자 증명서 자체 검증</dt><dd>{promotionVerified ? "PASS" : "미검증"}</dd></div>
-          <div><dt>transport token</dt><dd>{promotionToken.length} characters</dd></div>
-          <div><dt>HTTPS route</dt><dd>Phase 4I-B production route 미확정</dd></div>
+          <div><dt>전달 토큰</dt><dd>{promotionToken.length} characters</dd></div>
+          <div><dt>HTTPS 경로</dt><dd>Phase 4I-B 운영 경로 미확정</dd></div>
         </dl>}
-        {promotionDiagnostics && <pre className="credential-preview">{JSON.stringify(promotionDiagnostics, null, 2)}</pre>}
-        {promotionJson && <pre className="credential-preview">{JSON.stringify(promotionCredential, null, 2)}</pre>}
+        {promotionDiagnostics && <details className="credential-technical"><summary>Native 기술 진단</summary><pre className="credential-preview">{JSON.stringify(promotionDiagnostics, null, 2)}</pre></details>}
+        {promotionJson && <details className="credential-technical"><summary>서명된 JSON 기술 상세</summary><pre className="credential-preview">{JSON.stringify(promotionCredential, null, 2)}</pre></details>}
         {promotionVerified === false && <p className="credential-error">승급·승단 전자 증명서 검증에 실패했습니다.</p>}
         <button className="ghost full" type="button" disabled={!promotionJson || busy} onClick={() => exportJson(promotionFilename, promotionJson)}>
           <FileDown />현재 승급·승단 전자 증명서 JSON 저장 (Promotion Credential v1)
@@ -465,16 +487,16 @@ export default function CredentialIssuerPage() {
       <section className="panel credential-section" aria-live="polite">
         <h2>특별수련 검증·전달 결과</h2>
         {specialCredential && <dl className="credential-diagnostics">
-          <div><dt>eventId</dt><dd>{specialCredential.signed.payload.eventId}</dd></div>
-          <div><dt>credentialId</dt><dd>{specialCredential.signed.credentialId}</dd></div>
-          <div><dt>keyId</dt><dd>{specialCredential.signed.keyId}</dd></div>
-          <div><dt>issuedAt</dt><dd>{specialCredential.signed.issuedAt}</dd></div>
-          <div><dt>signature</dt><dd>64-byte r||s · unpadded base64url</dd></div>
+          <div><dt>행사 ID (eventId)</dt><dd>{specialCredential.signed.payload.eventId}</dd></div>
+          <div><dt>전자 증명서 ID (credentialId)</dt><dd>{specialCredential.signed.credentialId}</dd></div>
+          <div><dt>서명 키 ID (keyId)</dt><dd>{specialCredential.signed.keyId}</dd></div>
+          <div><dt>발급 시각 (issuedAt)</dt><dd>{specialCredential.signed.issuedAt}</dd></div>
+          <div><dt>서명 방식</dt><dd>64-byte r||s · unpadded base64url</dd></div>
           <div><dt>전자 증명서 자체 검증</dt><dd>{specialVerified ? "PASS" : "미검증"}</dd></div>
-          <div><dt>transport token</dt><dd>{specialToken.length} characters</dd></div>
+          <div><dt>전달 토큰</dt><dd>{specialToken.length} characters</dd></div>
         </dl>}
-        {specialDiagnostics && <pre className="credential-preview">{JSON.stringify(specialDiagnostics, null, 2)}</pre>}
-        {specialJson && <pre className="credential-preview">{JSON.stringify(specialCredential, null, 2)}</pre>}
+        {specialDiagnostics && <details className="credential-technical"><summary>Native 기술 진단</summary><pre className="credential-preview">{JSON.stringify(specialDiagnostics, null, 2)}</pre></details>}
+        {specialJson && <details className="credential-technical"><summary>서명된 JSON 기술 상세</summary><pre className="credential-preview">{JSON.stringify(specialCredential, null, 2)}</pre></details>}
         {specialQrDataUrl && <div className="credential-qr-output">
           <img src={specialQrDataUrl} alt="특별수련 운영용 HTTPS 링크 QR" />
           <p>QR에는 운영용 HTTPS 전달 URL이 들어 있습니다. URL 자체는 화면에 표시하거나 복사·직접 공유하지 않습니다.</p>

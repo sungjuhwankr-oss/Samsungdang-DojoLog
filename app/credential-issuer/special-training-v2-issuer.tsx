@@ -27,6 +27,7 @@ import {
   createSpecialTrainingV2ProductionLink,
   downloadSpecialTrainingQrPng
 } from "../special-training-output";
+import { issuerFailure, koreanInputErrors } from "./presentation";
 
 type Props = { nativeAvailable: boolean; bootstrap: TrustedKeyBootstrap | null };
 
@@ -55,7 +56,9 @@ export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap }: Props) {
   const [busy, setBusy] = useState(false);
   const [importJson, setImportJson] = useState("");
   const [memo, setMemo] = useState("");
+  const [technicalDiagnostic, setTechnicalDiagnostic] = useState<string | null>(null);
   const errors = useMemo(() => specialTrainingV2InputErrors(payload), [payload]);
+  const presentedErrors = useMemo(() => koreanInputErrors(errors), [errors]);
   const locked = credential !== null;
 
   useEffect(() => {
@@ -82,6 +85,7 @@ export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap }: Props) {
     if (!bootstrap || errors.length > 0) return;
     setBusy(true);
     setMessage("");
+    setTechnicalDiagnostic(null);
     try {
       const result = await issueNativeSpecialTrainingV2Credential(payload);
       if (result.status !== "success" || !result.json) throw new Error(result.message ?? "special-training v2 issuance failed");
@@ -95,7 +99,9 @@ export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap }: Props) {
       setQr(qrDataUrl);
       setMessage("운영용 키로 서명하고 링크와 QR의 동일 URL을 검증했습니다.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "전자 증명서 발급에 실패했습니다.");
+      const presented = issuerFailure(error, "전자 증명서 발급에 실패했습니다.");
+      setMessage(presented.message);
+      setTechnicalDiagnostic(presented.diagnostic);
     } finally {
       setBusy(false);
     }
@@ -106,11 +112,12 @@ export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap }: Props) {
     setPriorSessions(Object.fromEntries(payload.sessions.map(session => [session.sessionId, session])));
     replacePayload({ revision: payload.revision + 1, supersedesCredentialId: credential.signed.credentialId });
     setCredential(null); setCredentialJson(""); setLink(""); setQr("");
-    setMessage("직전 전자 증명서를 선행 증명서로 하는 정정 발급을 준비했습니다. 기존 수련 회차의 의미를 바꾸면 새 sessionId가 자동 생성됩니다.");
+    setMessage("직전 전자 증명서를 선행 증명서로 하는 정정 발급을 준비했습니다. 기존 수련 회차의 의미를 바꾸면 새 수련 회차 ID가 자동 생성됩니다.");
   };
 
   const prepareImportedCorrection = async () => {
     if (!bootstrap) return;
+    setTechnicalDiagnostic(null);
     try {
       const parsed = JSON.parse(importJson) as { signed?: { credentialVersion?: number } };
       if (parsed.signed?.credentialVersion === 1) {
@@ -139,9 +146,11 @@ export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap }: Props) {
         : parseSpecialTrainingV2Credential(importJson).signed.payload.eventId;
       setMemo(loadInstructorEventMemo(importedEventId)?.memo ?? "");
       setCredential(null); setCredentialJson(""); setLink(""); setQr("");
-      setMessage("서명과 keyId를 검증한 뒤 정정 발급 입력폼을 만들었습니다.");
+      setMessage("서명과 서명 키 ID를 검증한 뒤 정정 발급 입력폼을 만들었습니다.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "기존 전자 증명서를 불러오지 못했습니다.");
+      const presented = issuerFailure(error, "기존 전자 증명서를 불러오지 못했습니다.");
+      setMessage(presented.message);
+      setTechnicalDiagnostic(presented.diagnostic);
     }
   };
 
@@ -163,25 +172,28 @@ export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap }: Props) {
     <div className="credential-section-title"><QrCode /><div><span>6</span><h2>특별수련 전자 증명서 (Special-training Credential v2)</h2></div></div>
     <p>수련 회차 목록을 운영용 Android Keystore 키로 서명합니다. 회원번호와 회원명은 포함하지 않습니다.</p>
     <div className="credential-form credential-form-special">
-      <label><span>eventId</span><input value={payload.eventId} readOnly /></label>
-      <label><span>revision</span><input value={payload.revision} readOnly /></label>
-      <label><span>supersedesCredentialId</span><input value={payload.supersedesCredentialId ?? "없음"} readOnly /></label>
       <label><span>행사명</span><input disabled={locked} value={payload.title} onChange={event => replacePayload({ title: event.target.value })} /></label>
+      <label><span>행사 종류</span><input value="특별수련" readOnly /></label>
       <label><span>시작일</span><input disabled={locked} type="date" value={payload.startDate} onChange={event => replacePayload({ startDate: event.target.value })} /></label>
       <label><span>종료일</span><input disabled={locked} type="date" value={payload.endDate ?? ""} onChange={event => replacePayload({ endDate: event.target.value || null })} /></label>
       <label><span>지도자</span><input disabled={locked} value={payload.instructor} onChange={event => replacePayload({ instructor: event.target.value })} /></label>
     </div>
+    <details className="credential-technical"><summary>자동 생성 기술 정보</summary><dl className="credential-diagnostics">
+      <div><dt>행사 ID (eventId)</dt><dd>{payload.eventId}</dd></div>
+      <div><dt>정정 차수 (revision)</dt><dd>{payload.revision}</dd></div>
+      <div><dt>이전 전자 증명서 ID</dt><dd>{payload.supersedesCredentialId ?? "없음"}</dd></div>
+    </dl><p>위 식별자와 정정 정보는 자동으로 관리되므로 직접 입력할 필요가 없습니다.</p></details>
     <h3>표시 순서대로 서명되는 수련 회차</h3>
     {payload.sessions.map((session, index) => <div className="credential-form" key={session.sessionId}>
-      <label><span>sessionId</span><input value={session.sessionId} readOnly /></label>
-      <label><span>날짜</span><input disabled={locked} type="date" value={session.date} onChange={event => setSession(index, "date", event.target.value)} /></label>
-      <label><span>표시명</span><input disabled={locked} value={session.label} onChange={event => setSession(index, "label", event.target.value)} /></label>
+      <label><span>수련 회차 날짜</span><input disabled={locked} type="date" value={session.date} onChange={event => setSession(index, "date", event.target.value)} /></label>
+      <label><span>수련 회차 표시명</span><input disabled={locked} value={session.label} onChange={event => setSession(index, "label", event.target.value)} /></label>
+      <details className="credential-technical"><summary>회차 기술 정보</summary><p>수련 회차 ID (sessionId): <code>{session.sessionId}</code></p><p>자동 생성되므로 직접 입력할 필요가 없습니다.</p></details>
       {!locked && payload.sessions.length > 1 && <button className="ghost" type="button" onClick={() => replacePayload({ sessions: payload.sessions.filter((_, itemIndex) => itemIndex !== index) })}>수련 회차 삭제</button>}
     </div>)}
     <button className="ghost full" type="button" disabled={locked} onClick={() => replacePayload({ sessions: [...payload.sessions, { ...firstSession(), date: payload.startDate }] })}>수련 회차 추가</button>
-    {errors.map(error => <p className="credential-error" key={error}>{error}</p>)}
+    {presentedErrors.map(error => <div key={`${error.message}-${error.diagnostic ?? ""}`}><p className="credential-error">{error.message}</p>{error.diagnostic && <details className="credential-technical"><summary>기술 진단</summary><code>{error.diagnostic}</code></details>}</div>)}
     <button className="primary large" type="button" disabled={!nativeAvailable || !bootstrap || busy || locked || errors.length > 0} onClick={issue}>특별수련 전자 증명서 발급</button>
-    <button className="ghost full" type="button" onClick={newEvent}><RefreshCw />새 행사 eventId</button>
+    <button className="ghost full" type="button" onClick={newEvent}><RefreshCw />새 행사 ID 생성</button>
     {credential && <button className="ghost full" type="button" onClick={prepareCorrection}>현재 발급본 기준 정정 발급 준비</button>}
 
     <details>
@@ -193,17 +205,18 @@ export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap }: Props) {
     <label><span>지도자 행사 메모 (전자 증명서와 분리)</span><textarea value={memo} onChange={event => setMemo(event.target.value)} /></label>
     <button className="ghost full" type="button" disabled={!/^st1_[A-Za-z0-9_-]{22}$/.test(payload.eventId)} onClick={() => {
       saveInstructorEventMemo(payload.eventId, memo);
-      setMessage("지도자 메모를 이 eventId에 별도 저장했습니다.");
+      setMessage("지도자 메모를 이 행사 ID에 별도 저장했습니다.");
     }}>메모 저장</button>
     <p className="credential-warning">지도자 행사 메모는 수련자용 앱으로 전송·동기화되지 않으며 현재 지도자용 Backup v1에도 포함되지 않습니다.</p>
 
     {message && <p className="credential-status" role="status">{message}</p>}
-    {credential && <dl className="credential-diagnostics">
-      <div><dt>credentialId</dt><dd>{credential.signed.credentialId}</dd></div>
-      <div><dt>revision</dt><dd>{credential.signed.payload.revision}</dd></div>
-      <div><dt>signature</dt><dd>JCS · P-256 ECDSA · 64-byte r||s</dd></div>
-      <div><dt>transport</dt><dd>{new URL(link).searchParams.get("credential")?.startsWith("gz1.") ? "gz1" : "raw base64url"}</dd></div>
-    </dl>}
+    {technicalDiagnostic && <details className="credential-technical"><summary>기술 진단</summary><code>{technicalDiagnostic}</code></details>}
+    {credential && <details className="credential-technical"><summary>발급 결과 기술 정보</summary><dl className="credential-diagnostics">
+      <div><dt>전자 증명서 ID (credentialId)</dt><dd>{credential.signed.credentialId}</dd></div>
+      <div><dt>정정 차수 (revision)</dt><dd>{credential.signed.payload.revision}</dd></div>
+      <div><dt>서명 방식</dt><dd>JCS · P-256 ECDSA · 64-byte r||s</dd></div>
+      <div><dt>전달 형식</dt><dd>{new URL(link).searchParams.get("credential")?.startsWith("gz1.") ? "gz1" : "raw base64url"}</dd></div>
+    </dl></details>}
     {link && <div className="credential-qr-output">
       <img src={qr} alt="특별수련 운영용 HTTPS 링크 QR" />
       <label><span>QR과 동일한 운영용 HTTPS 링크</span><textarea readOnly value={link} /></label>
