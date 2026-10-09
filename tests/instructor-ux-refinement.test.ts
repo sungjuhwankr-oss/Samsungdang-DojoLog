@@ -58,7 +58,7 @@ test('Home reset applies every draft field and preserves edit cancellation and j
   }
   assert.doesNotMatch(reset,/setLogs|setLastSession|localStorage|sessionStorage/);
   assert.match(page,/!editingId&&<DraftResetButton onReset=\{resetEditor\}\/>/);
-  assert.match(page,/<button onClick=\{resetEditor\}>수정 취소<\/button>/);
+  assert.match(page,/<button className="ghost" onClick=\{resetEditor\}><X\/>수정 취소<\/button>/);
 });
 
 test('replacement technical group order is exact and each group follows existing Hombu presentation',()=>{

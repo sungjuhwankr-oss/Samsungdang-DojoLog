@@ -30,6 +30,7 @@ const INPUT_ERROR_MESSAGES: ReadonlyArray<readonly [RegExp, string]> = [
   [/currentRankEntryId must identify the highest rank/i, "현재 단급이 인정 단급 이력의 마지막이 되도록 입력해 주세요."],
   [/invalid currentRankSessionBaseline/i, "현급 기준 수련횟수는 0 이상의 정수로 입력하거나 미상으로 두세요."],
   [/invalid kata baseline fields|invalid or duplicate canonical kataId/i, "카타는 목록에서 중복 없이 선택해 주세요."],
+  [/kata baseline count is required/i, "횟수 미상을 해제한 카타의 기준 수련횟수를 입력해 주세요."],
   [/invalid kata baseline count/i, "카타 기준 수련횟수는 0 이상의 정수로 입력하거나 미상으로 두세요."],
   [/examDate must/i, "심사일을 올바른 날짜로 입력해 주세요."],
   [/rankDate must not be after recognizedAt/i, "원 단급 취득일은 삼성당 인정일보다 늦을 수 없습니다."],

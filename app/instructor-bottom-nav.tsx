@@ -9,7 +9,7 @@ export const INSTRUCTOR_NAV_ITEMS = [
   { id: "logs", label: "수업일지", icon: History },
   { id: "hombu", label: "본부 카타", icon: BookOpen },
   { id: "exam", label: "삼성당 심사표", icon: Dumbbell },
-  { id: "beginner", label: "초심자 동영상", icon: BookOpen },
+  { id: "beginner", label: "초심자용 교본", icon: BookOpen },
   { id: "manage", label: "관리", icon: Settings }
 ] as const;
 

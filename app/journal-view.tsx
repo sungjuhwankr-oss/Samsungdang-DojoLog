@@ -22,7 +22,7 @@ export function JournalMemoCard({log,onOriginal}:{log:DojoLog;onOriginal:(id:str
   return <article className="panel journal-memo-card">
     <h3>{log.date} {log.session?`· ${log.session}차`:'· 회차 미반영'}</h3>
     <p className="note">{log.note}</p>
-    <button type="button" className="ghost" onClick={()=>onOriginal(log.id)}>원본 수업일지 보기</button>
+    <button type="button" className="ghost original-log-button" onClick={()=>onOriginal(log.id)}>원본 수업일지 보기</button>
   </article>;
 }
 export function SavedKataDetails({kata,onOpen}:{kata:Kata;onOpen:(url:string)=>void}){

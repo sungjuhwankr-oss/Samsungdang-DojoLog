@@ -62,7 +62,7 @@ type PromotionKind = "advance-one" | "target" | "recognized-at-entry";
 
 type KeyReadiness = "checking" | "ready" | "error" | "unsupported";
 
-export default function CredentialIssuerPage({ embedded = false }: { embedded?: boolean } = {}) {
+export default function CredentialIssuerPage({ embedded = false, active = true }: { embedded?: boolean; active?: boolean } = {}) {
   const nativeAvailable = useSyncExternalStore(
     () => () => undefined,
     hasNativeCredentialBridge,
@@ -379,7 +379,7 @@ export default function CredentialIssuerPage({ embedded = false }: { embedded?: 
         </button>
       </section>
 
-      <details className="credential-legacy-tools">
+      <details key={active ? "active" : "inactive"} className="credential-legacy-tools">
         <summary>기술 검증 도구</summary>
         <div className="credential-legacy-tools-body">
 

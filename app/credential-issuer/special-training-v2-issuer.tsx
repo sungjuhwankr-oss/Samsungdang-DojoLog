@@ -1,8 +1,8 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- generated QR data URL */
 
-import { useEffect, useMemo, useState } from "react";
-import { Download, FileDown, QrCode, RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { Download, FileDown, FileUp, QrCode, RefreshCw } from "lucide-react";
 
 import { saveBackupFile } from "../backup-file";
 import {
@@ -55,8 +55,10 @@ export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap, keyReadine
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [importJson, setImportJson] = useState("");
+  const [selectedFilename, setSelectedFilename] = useState("선택된 파일 없음");
   const [memo, setMemo] = useState("");
   const [technicalDiagnostic, setTechnicalDiagnostic] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const errors = useMemo(() => specialTrainingV2InputErrors(payload), [payload]);
   const presentedErrors = useMemo(() => koreanInputErrors(errors), [errors]);
   const locked = credential !== null;
@@ -154,6 +156,15 @@ export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap, keyReadine
     }
   };
 
+  const selectImportFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) return;
+    setSelectedFilename(file.name);
+    setImportJson(await file.text());
+    setMessage("JSON 파일을 선택했습니다. 서명 검증 후 불러오기를 실행하십시오.");
+  };
+
   const newEvent = () => {
     const eventId = generateSpecialTrainingEventId();
     setPayload({ ...payload, eventId, revision: 1, supersedesCredentialId: null, sessions: [firstSession()] });
@@ -197,10 +208,16 @@ export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap, keyReadine
     <button className="ghost full" type="button" onClick={newEvent}><RefreshCw />새 행사 ID 생성</button>
     {credential && <button className="ghost full" type="button" onClick={prepareCorrection}>현재 발급본 기준 정정 발급 준비</button>}
 
-    <details>
+    <details className="credential-disclosure">
       <summary>기존 전자 증명서(Credential v1/v2)를 검증해 정정 발급 준비</summary>
+      <div className="credential-file-import">
+        <div><strong>기존 특별수련 전자 증명서 JSON</strong><p>v1 또는 v2 JSON 파일을 선택한 뒤 기존 검증 절차로 정정 발급을 준비합니다.</p></div>
+        <input ref={importInputRef} className="visually-hidden" type="file" accept="application/json,.json" disabled={busy} aria-label="기존 특별수련 전자 증명서 JSON 파일 선택" onChange={event => void selectImportFile(event)} />
+        <button className="ghost" type="button" disabled={busy} onClick={() => importInputRef.current?.click()}><FileUp />JSON 파일 선택</button>
+        <span className="credential-selected-file">{selectedFilename}</span>
+      </div>
       <textarea value={importJson} onChange={event => setImportJson(event.target.value)} aria-label="기존 특별수련 전자 증명서 JSON" />
-      <button className="ghost full" type="button" disabled={!bootstrap || !importJson} onClick={prepareImportedCorrection}>서명 검증 후 불러오기</button>
+      <button className="ghost full" type="button" disabled={!bootstrap || !importJson || busy} onClick={prepareImportedCorrection}>서명 검증 후 불러오기</button>
     </details>
 
     <label><span>지도자 행사 메모 (전자 증명서와 분리)</span><textarea value={memo} onChange={event => setMemo(event.target.value)} /></label>

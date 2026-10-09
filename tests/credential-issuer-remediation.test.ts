@@ -7,9 +7,12 @@ import {
   createPreviousRankRow,
   nextKataBaseline,
   ONBOARDING_KATA_OPTIONS,
+  serializeKataBaselines,
   updateKataBaseline,
   updatePreviousRankRow
 } from "../app/credential-issuer/onboarding-form";
+import { KATAS } from "../app/data";
+import { orderHombuKatas } from "../app/kata-presentation";
 import { issuerFailure, koreanInputError, koreanInputErrors } from "../app/credential-issuer/presentation";
 import { normalizeOnboardingMemberId, validateMemberOnboardingPayload } from "../app/onboarding-credential";
 
@@ -95,13 +98,18 @@ test("structured onboarding rows produce the unchanged payload shape and ASD-000
   ]);
 });
 
-test("Kata baseline picker projects canonical v2 IDs, names, order, unknown count, and no duplicate default", () => {
-  assert.deepEqual(ONBOARDING_KATA_OPTIONS, catalog.kata.map(item => ({ id: item.id, name: item.nameKo })));
+test("Kata baseline picker projects Hombu display order without changing canonical IDs", () => {
+  assert.deepEqual(ONBOARDING_KATA_OPTIONS, orderHombuKatas(KATAS).map(item => ({ id: item.id, name: item.name })));
+  assert.deepEqual([...ONBOARDING_KATA_OPTIONS.map(item => item.id)].sort(), catalog.kata.map(item => item.id).sort());
   const first = nextKataBaseline([])!;
   const second = nextKataBaseline([first])!;
-  assert.deepEqual(first, { kataId: catalog.kata[0].id, count: null });
-  assert.deepEqual(second, { kataId: catalog.kata[1].id, count: null });
+  assert.deepEqual(first, { kataId: ONBOARDING_KATA_OPTIONS[0].id, count: null });
+  assert.deepEqual(second, { kataId: ONBOARDING_KATA_OPTIONS[1].id, count: null });
   const known = updateKataBaseline([first], 0, { count: 0 });
-  assert.deepEqual(known, [{ kataId: catalog.kata[0].id, count: 0 }]);
+  assert.deepEqual(known, [{ kataId: ONBOARDING_KATA_OPTIONS[0].id, count: 0 }]);
   assert.equal(nextKataBaseline(catalog.kata.map(item => ({ kataId: item.id, count: null }))), null);
+  assert.deepEqual(serializeKataBaselines([{ kataId: first.kataId, count: 0 }, { kataId: second.kataId, count: null }]), [
+    { kataId: first.kataId, count: 0 }, { kataId: second.kataId, count: null }
+  ]);
+  assert.throws(() => serializeKataBaselines([{ kataId: first.kataId, count: "" }]), /count is required/);
 });

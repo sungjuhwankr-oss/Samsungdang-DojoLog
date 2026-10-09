@@ -1,4 +1,5 @@
-import kataCatalog from "../../reference/kata-catalog.v2.json";
+import { KATAS } from "../data";
+import { orderHombuKatas } from "../kata-presentation";
 import {
   generateOnboardingRankEntryId,
   type KataBaseline,
@@ -6,9 +7,12 @@ import {
   type OnboardingRank
 } from "../onboarding-credential";
 
-export const ONBOARDING_KATA_OPTIONS = kataCatalog.kata.map(item => ({
+export type KataBaselineDraft = Omit<KataBaseline, "count"> & { count: number | null | "" };
+
+// Presentation projection only: canonical IDs and the source catalog stay untouched.
+export const ONBOARDING_KATA_OPTIONS = orderHombuKatas(KATAS).map(item => ({
   id: item.id,
-  name: item.nameKo
+  name: item.name
 }));
 
 export function createPreviousRankRow(entryId = generateOnboardingRankEntryId()): OnboardingRank {
@@ -23,18 +27,23 @@ export function updatePreviousRankRow(
   return rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...change, entryId: row.entryId } : row);
 }
 
-export function nextKataBaseline(rows: readonly KataBaseline[]): KataBaseline | null {
+export function nextKataBaseline(rows: readonly KataBaselineDraft[]): KataBaselineDraft | null {
   const selected = new Set(rows.map(row => row.kataId));
   const option = ONBOARDING_KATA_OPTIONS.find(item => !selected.has(item.id));
   return option ? { kataId: option.id, count: null } : null;
 }
 
 export function updateKataBaseline(
-  rows: readonly KataBaseline[],
+  rows: readonly KataBaselineDraft[],
   index: number,
-  change: Partial<KataBaseline>
-): KataBaseline[] {
+  change: Partial<KataBaselineDraft>
+): KataBaselineDraft[] {
   return rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...change } : row);
+}
+
+export function serializeKataBaselines(rows: readonly KataBaselineDraft[]): KataBaseline[] {
+  if (rows.some(row => row.count === "")) throw new Error("kata baseline count is required");
+  return rows.map(row => ({ kataId: row.kataId, count: row.count as number | null }));
 }
 
 type BuildOnboardingPayloadInput = {
@@ -52,7 +61,7 @@ type BuildOnboardingPayloadInput = {
   currentRankDate: string | null;
   baselineAsOf: string;
   currentRankSessionBaseline: number | null;
-  kataBaselines: readonly KataBaseline[];
+  kataBaselines: readonly KataBaselineDraft[];
 };
 
 export function buildOnboardingPayload(input: BuildOnboardingPayloadInput): MemberOnboardingPayload {
@@ -72,6 +81,6 @@ export function buildOnboardingPayload(input: BuildOnboardingPayloadInput): Memb
     currentRankEntryId: input.currentRankEntryId,
     baselineAsOf: input.baselineAsOf,
     currentRankSessionBaseline: input.currentRankSessionBaseline,
-    kataBaselines: [...input.kataBaselines]
+    kataBaselines: serializeKataBaselines(input.kataBaselines)
   };
 }

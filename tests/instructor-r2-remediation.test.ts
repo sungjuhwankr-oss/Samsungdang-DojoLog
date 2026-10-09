@@ -10,7 +10,7 @@ test("R2 uses one six-item instructor navigation with management active on the d
     read("../app/page.tsx"),
     read("../app/credential-issuer/page.tsx")
   ]);
-  for (const label of ["수업구성", "수업일지", "본부 카타", "삼성당 심사표", "초심자 동영상", "관리"]) assert.ok(nav.includes(label));
+  for (const label of ["수업구성", "수업일지", "본부 카타", "삼성당 심사표", "초심자용 교본", "관리"]) assert.ok(nav.includes(label));
   assert.equal((nav.match(/label:/g) ?? []).length, 6);
   assert.match(page, /<InstructorBottomNav active=\{tab\} onSelect=\{setTab\}/);
   assert.match(issuer, /<InstructorBottomNav active="manage"/);
@@ -23,6 +23,7 @@ test("R2 keeps planner and credential workspaces mounted in memory without crede
   ]);
   assert.match(page, /<div hidden=\{tab!=="manage"\}><ManagementScreen/);
   assert.match(page, /credentialMounted&&<div hidden=\{view!=="credential"\}/);
+  assert.match(page, /<CredentialIssuerPage embedded active=\{view==="credential"\}/);
   assert.doesNotMatch(`${issuer}\n${onboarding}`, /localStorage|sessionStorage|indexedDB/i);
 });
 
@@ -43,8 +44,9 @@ test("R2 automatically restores key readiness and explains v2 issuance blocking 
   assert.match(special, /disabled=\{!nativeAvailable \|\| !bootstrap \|\| busy \|\| locked \|\| errors\.length > 0\}/);
 });
 
-test("R2 strengthens the registered-kata add control without changing its handler", async () => {
+test("R3 promotes the registered-kata add control without changing its handler", async () => {
   const [page, css] = await Promise.all([read("../app/page.tsx"), read("../app/add-panel.css")]);
-  assert.match(page, /className="secondary-add" onClick=\{addSelected\}>카타 추가 선택\(무기술 포함\)/);
-  assert.match(css, /\.secondary-add\{border:1px solid/);
+  assert.match(page, /className="registered-add" onClick=\{addSelected\}>등록된 카타 추가/);
+  assert.match(css, /\.registered-add\{border:0;background:var\(--green\)/);
+  assert.match(css, /\.custom-add\{border:1px dashed/);
 });

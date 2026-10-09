@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { ChevronDown, ChevronUp, FileDown, FileUp } from "lucide-react";
 
 import { saveBackupFile } from "../backup-file";
@@ -18,7 +18,6 @@ import {
   validateMemberOnboardingCorrection,
   validateMemberOnboardingPayload,
   verifyMemberOnboardingCredential,
-  type KataBaseline,
   type MemberOnboardingCredential,
   type OnboardingRank
 } from "../onboarding-credential";
@@ -28,7 +27,8 @@ import {
   nextKataBaseline,
   ONBOARDING_KATA_OPTIONS,
   updateKataBaseline,
-  updatePreviousRankRow
+  updatePreviousRankRow,
+  type KataBaselineDraft
 } from "./onboarding-form";
 import { issuerFailure, koreanInputError } from "./presentation";
 
@@ -54,7 +54,7 @@ export function OnboardingIssuer({ nativeAvailable, issuerReady = true }: { nati
   const [currentRankEntryId, setCurrentRankEntryId] = useState(() => generateOnboardingRankEntryId());
   const [previousRanks, setPreviousRanks] = useState<OnboardingRank[]>([]);
   const [sessionBaseline, setSessionBaseline] = useState("");
-  const [kataBaselines, setKataBaselines] = useState<KataBaseline[]>([]);
+  const [kataBaselines, setKataBaselines] = useState<KataBaselineDraft[]>([]);
   const [source, setSource] = useState<MemberOnboardingCredential | null>(null);
   const [output, setOutput] = useState<MemberOnboardingCredential | null>(null);
   const [outputJson, setOutputJson] = useState("");
@@ -165,6 +165,12 @@ export function OnboardingIssuer({ nativeAvailable, issuerReady = true }: { nati
     }
   }
 
+  async function selectPrevious(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (file) await loadPrevious(file);
+  }
+
   async function saveQr() {
     if (!qr) return;
     const result = await savePngImage(qr, "Samsungdang-DojoLog-member-onboarding-QR.png");
@@ -199,7 +205,7 @@ export function OnboardingIssuer({ nativeAvailable, issuerReady = true }: { nati
     <p>한 명의 회원 정보·인정 단급 및 이력·기준 수련기록만 일회성으로 발급하며 회원명부를 저장하지 않습니다.</p>
     <div className="credential-file-import">
       <div><strong>기존 회원 초기등록 전자 증명서 JSON 검증·불러오기</strong><p>저장한 JSON 파일을 선택하면 서명을 검증하고 정정 발급 입력을 준비합니다.</p></div>
-      <input ref={fileInputRef} className="visually-hidden" type="file" accept="application/json,.json" disabled={busy} onChange={event => event.target.files?.[0] && void loadPrevious(event.target.files[0])} />
+      <input ref={fileInputRef} className="visually-hidden" type="file" accept="application/json,.json" disabled={busy} onChange={event => void selectPrevious(event)} />
       <button className="ghost" type="button" disabled={busy} onClick={() => fileInputRef.current?.click()}><FileUp />JSON 파일 선택</button>
       <span className="credential-selected-file">{selectedFilename}</span>
     </div>
@@ -235,8 +241,8 @@ export function OnboardingIssuer({ nativeAvailable, issuerReady = true }: { nati
           <label><span>카타</span><select value={baseline.kataId} onChange={event => setKataBaselines(rows => updateKataBaseline(rows, index, { kataId: event.target.value }))}>
             {ONBOARDING_KATA_OPTIONS.map(option => <option key={option.id} value={option.id} disabled={kataBaselines.some((row, rowIndex) => rowIndex !== index && row.kataId === option.id)}>{option.name}</option>)}
           </select></label>
-          <label><span>기준 수련횟수</span><input type="number" min="0" disabled={baseline.count === null} value={baseline.count ?? ""} onChange={event => setKataBaselines(rows => updateKataBaseline(rows, index, { count: event.target.value === "" ? null : Number(event.target.value) }))} /></label>
-          <label className="credential-inline-toggle"><input type="checkbox" checked={baseline.count === null} onChange={event => setKataBaselines(rows => updateKataBaseline(rows, index, { count: event.target.checked ? null : 0 }))} /><span>횟수 미상</span></label>
+          <label><span>기준 수련횟수</span><input type="number" min="0" disabled={baseline.count === null} value={baseline.count ?? ""} onChange={event => setKataBaselines(rows => updateKataBaseline(rows, index, { count: event.target.value === "" ? "" : Number(event.target.value) }))} /></label>
+          <label className="credential-inline-toggle"><input type="checkbox" checked={baseline.count === null} onChange={event => setKataBaselines(rows => updateKataBaseline(rows, index, { count: event.target.checked ? null : "" }))} /><span>횟수 미상</span></label>
         </div>
         <button className="ghost" type="button" onClick={() => setKataBaselines(rows => rows.filter((_, rowIndex) => rowIndex !== index))}>카타 기준 삭제</button>
       </div>)}
