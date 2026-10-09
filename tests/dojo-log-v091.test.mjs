@@ -356,6 +356,7 @@ test("adds backward-compatible ungraded participants without changing exam targe
   assert.doesNotMatch(page, /선택한 급에서 새로 평가하는 항목입니다/);
   assert.match(page, /9급 심사요항을 최초 학습 범위로 봅니다/);
   assert.match(page, /무급·7급·5급·2급/);
-  assert.match(page, /useState<NumericGrade>\(7\)/);
+  // R4 adds a presentation-only dan weapons tab; numeric grade default remains 7.
+  assert.match(page, /useState<NumericGrade\|"dan-weapons">\(7\)/);
   assert.match(page, /exam-tabs[^\n]+GRADES\.map/);
 });

@@ -1418,3 +1418,16 @@
 .beginner-library .beginner-section strong { font-weight:700; }
 .beginner-library .beginner-child { padding-left:1rem; }
 .beginner-library .video-link { flex-shrink:0; }
+
+/* R4: fixed return occupies reserved space, never the QR/action viewport. */
+.management-workspace:has(.management-back) { padding-bottom: 76px; }
+.management-back { position: fixed; left: max(16px, calc((100vw - 940px) / 2)); bottom: calc(82px + env(safe-area-inset-bottom)); z-index: 30; min-height: 44px; padding: 10px 16px; border: 1px solid var(--line); border-radius: 24px; background: #fff; color: var(--green); box-shadow: 0 3px 12px #0002; }
+.credential-workspace { border: 1px solid var(--line); border-radius: 16px; background: #eef2f0; }
+.credential-workspace > summary { display: flex; align-items: center; justify-content: space-between; min-height: 52px; padding: 14px; cursor: pointer; font-weight: 850; color: var(--green); list-style: none; }
+.credential-workspace > summary::-webkit-details-marker { display: none; }
+.credential-shell .credential-workspace > summary::after { content: none; }
+.credential-workspace > summary svg { width: 20px; height: 20px; }
+.credential-workspace[open] > summary svg { transform: rotate(180deg); }
+.credential-workspace-body { display: flex; flex-direction: column; gap: 14px; padding: 0 10px 10px; }
+.session-order-actions { flex-wrap: wrap; }
+.credential-file-import > [role="status"], .credential-file-import > [role="alert"] { grid-column: 1 / -1; }

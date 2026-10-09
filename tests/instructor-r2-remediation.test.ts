@@ -8,22 +8,23 @@ test("R2 uses one six-item instructor navigation with management active on the d
   const [nav, page, issuer] = await Promise.all([
     read("../app/instructor-bottom-nav.tsx"),
     read("../app/page.tsx"),
-    read("../app/credential-issuer/page.tsx")
+    read("../app/credential-issuer/issuer-workspace.tsx")
   ]);
   for (const label of ["수업구성", "수업일지", "본부 카타", "삼성당 심사표", "초심자용 교본", "관리"]) assert.ok(nav.includes(label));
   assert.equal((nav.match(/label:/g) ?? []).length, 6);
-  assert.match(page, /<InstructorBottomNav active=\{tab\} onSelect=\{setTab\}/);
+  // R4 intercepts re-tapping management while preserving the other five tabs.
+  assert.match(page, /<InstructorBottomNav active=\{tab\} onSelect=\{id=>/);
   assert.match(issuer, /<InstructorBottomNav active="manage"/);
   for (const item of ["회원·수련 인증", "백업·복원", "앱 정보·사용법"]) assert.ok(page.includes(item));
 });
 
 test("R2 keeps planner and credential workspaces mounted in memory without credential browser persistence", async () => {
   const [page, issuer, onboarding] = await Promise.all([
-    read("../app/page.tsx"), read("../app/credential-issuer/page.tsx"), read("../app/credential-issuer/onboarding-issuer.tsx")
+    read("../app/page.tsx"), read("../app/credential-issuer/issuer-workspace.tsx"), read("../app/credential-issuer/onboarding-issuer.tsx")
   ]);
   assert.match(page, /<div hidden=\{tab!=="manage"\}><ManagementScreen/);
   assert.match(page, /credentialMounted&&<div hidden=\{view!=="credential"\}/);
-  assert.match(page, /<CredentialIssuerPage embedded active=\{view==="credential"\}/);
+  assert.match(page, /<CredentialIssuerPage embedded active=\{view==="credential"&&active\}/);
   assert.doesNotMatch(`${issuer}\n${onboarding}`, /localStorage|sessionStorage|indexedDB/i);
 });
 
@@ -37,7 +38,7 @@ test("R2 onboarding result is collapsible and exports pretty JSON through the ex
 
 test("R2 automatically restores key readiness and explains v2 issuance blocking states", async () => {
   const [issuer, special] = await Promise.all([
-    read("../app/credential-issuer/page.tsx"), read("../app/credential-issuer/special-training-v2-issuer.tsx")
+    read("../app/credential-issuer/issuer-workspace.tsx"), read("../app/credential-issuer/special-training-v2-issuer.tsx")
   ]);
   assert.match(issuer, /void provision\(\)/);
   for (const text of ["운영용 서명 키를 확인하는 중입니다", "운영용 서명 키 준비가 완료되었습니다", "운영용 서명 키를 확인하지 못했습니다", "Android 설치형 앱에서만"]) assert.ok(`${issuer}\n${special}`.includes(text));

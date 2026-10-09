@@ -65,7 +65,7 @@ test('translated option labels preserve exact internal enum values and JSON fiel
   }
   for(const value of ['advance-one','target','recognized-at-entry','kyu','dan'])assert.ok(html.includes(`value="${value}"`));
   const onboarding=await source('../app/credential-issuer/onboarding-issuer.tsx');
-  const issuer=await source('../app/credential-issuer/page.tsx');
+  const issuer=await source('../app/credential-issuer/issuer-workspace.tsx');
   const special=await source('../app/credential-issuer/special-training-v2-issuer.tsx');
   const issuerSources=`${issuer}\n${onboarding}\n${special}`;
   for(const label of ['행사 ID (eventId)','전자 증명서 ID (credentialId)','수련 회차 ID (sessionId)','초기등록 ID (onboardingId)','서명 키 ID (keyId)','정정 차수 (revision)','이전 전자 증명서 ID','서명 방식'])assert.ok(issuerSources.includes(label),label);

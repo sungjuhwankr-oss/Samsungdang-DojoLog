@@ -17,14 +17,14 @@ export function ScrollControls(){
     let frame=0;
     const update=()=>{
       frame=0;
-      const next=scrollNavigationState(document.documentElement.scrollHeight,window.innerHeight,window.scrollY);
+      const next=document.querySelector('.credential-shell[data-active="true"]')?{top:false,bottom:false}:scrollNavigationState(document.documentElement.scrollHeight,window.innerHeight,window.scrollY);
       setVisible(previous=>previous.top===next.top&&previous.bottom===next.bottom?previous:next);
     };
     const schedule=()=>{if(!frame)frame=window.requestAnimationFrame(update)};
     const resize=typeof ResizeObserver!=='undefined'?new ResizeObserver(schedule):null;
     resize?.observe(document.documentElement);resize?.observe(document.body);
     const mutation=new MutationObserver(schedule);
-    mutation.observe(document.body,{childList:true,subtree:true,characterData:true});
+    mutation.observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:["data-active","hidden","open"]});
     window.addEventListener('scroll',schedule,{passive:true});
     window.addEventListener('resize',schedule);schedule();
     return()=>{resize?.disconnect();mutation.disconnect();window.cancelAnimationFrame(frame);

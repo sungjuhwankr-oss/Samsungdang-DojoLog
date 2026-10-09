@@ -1,9 +1,11 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 
-import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, FileDown, FileUp } from "lucide-react";
 
+import { openCredentialFile } from "../credential-file";
+import { IssuerStatus, type OutcomeReporter } from "./workspace";
 import { saveBackupFile } from "../backup-file";
 import { savePngImage } from "../session-share-file";
 import { provisionProductionCredentialKey, issueNativeMemberOnboardingCredential } from "../credential-native";
@@ -40,7 +42,7 @@ function koreaToday(): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-export function OnboardingIssuer({ nativeAvailable, issuerReady = true }: { nativeAvailable: boolean; issuerReady?: boolean }) {
+export function OnboardingIssuer({ nativeAvailable, issuerReady = true, onOutcome }: { nativeAvailable: boolean; issuerReady?: boolean; onOutcome?: OutcomeReporter }) {
   const today = koreaToday();
   const [name, setName] = useState("테스트회원 (실제 회원 아님)");
   const [memberIdInput, setMemberIdInput] = useState("0");
@@ -62,6 +64,8 @@ export function OnboardingIssuer({ nativeAvailable, issuerReady = true }: { nati
   const [qr, setQr] = useState("");
   const [message, setMessage] = useState("신규 발급 또는 검증된 이전 JSON의 정정 발급을 준비합니다.");
   const [technicalDiagnostic, setTechnicalDiagnostic] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [importMessage, setImportMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [selectedFilename, setSelectedFilename] = useState("선택된 파일 없음");
   const [resultOpen, setResultOpen] = useState(false);
@@ -96,13 +100,21 @@ export function OnboardingIssuer({ nativeAvailable, issuerReady = true }: { nati
     }
   }, [baselineAsOf, currentRankEntryId, joinedAt, kataBaselines, memberIdInput, name, onboardingId, previousRanks, rankDate, rankType, rankValue, recognizedAt, sessionBaseline, source]);
 
+  async function prepareResult(credential: MemberOnboardingCredential) {
+    const link = await createOnboardingProductionLink(credential);
+    const qr = await createOnboardingQrDataUrl(link);
+    return { link, qr };
+  }
+  function commitResult(credential: MemberOnboardingCredential, json: string, result: { link: string; qr: string }) {
+    setOutput(credential); setOutputJson(json); setLink(result.link); setQr(result.qr); setResultOpen(true);
+  }
   async function renderResult(credential: MemberOnboardingCredential, json: string) {
-    const productionLink = await createOnboardingProductionLink(credential);
-    setOutput(credential);
-    setOutputJson(json);
-    setLink(productionLink);
-    setQr(await createOnboardingQrDataUrl(productionLink));
-    setResultOpen(true);
+    commitResult(credential, json, await prepareResult(credential));
+  }
+  function report(message: string, success: boolean, credential?: MemberOnboardingCredential) {
+    setMessage(message); setFailed(!success);
+    onOutcome?.({ workspace: "onboarding", label: "기존 회원 초기등록", message, success,
+      credentialId: credential?.signed.credentialId, keyId: credential?.signed.keyId });
   }
 
   async function issue() {
@@ -116,28 +128,29 @@ export function OnboardingIssuer({ nativeAvailable, issuerReady = true }: { nati
       const bootstrap = parseTrustedKeyBootstrap(result.bootstrap);
       if (!(await verifyMemberOnboardingCredential(credential, bootstrap))) throw new Error("발급 후 전자 증명서 자체 검증 실패");
       await renderResult(credential, result.json);
-      setMessage(`${mode === "new" ? "신규" : "정정"} 기존 회원 초기등록 전자 증명서를 생성했습니다.`);
+      report(`${mode === "new" ? "신규" : "정정"} 기존 회원 초기등록 전자 증명서를 생성했습니다.`, true, credential);
     } catch (error) {
       const presented = issuerFailure(error, "기존 회원 초기등록 전자 증명서 발급에 실패했습니다.");
-      setMessage(presented.message);
+      report(presented.message, false);
       setTechnicalDiagnostic(presented.diagnostic);
     } finally {
       setBusy(false);
     }
   }
 
-  async function loadPrevious(file: File) {
-    setSelectedFilename(file.name);
+  async function loadPrevious(selected: { filename: string; content: string }) {
     setBusy(true);
     setTechnicalDiagnostic(null);
     try {
-      const json = await file.text();
+      const json = selected.content;
       const credential = parseMemberOnboardingCredential(json);
       const key = await provisionProductionCredentialKey();
       if (key.status !== "success" || !key.json) throw new Error(key.message ?? "운영용 키 조회 실패");
       if (!(await verifyMemberOnboardingCredential(credential, parseTrustedKeyBootstrap(key.json)))) {
         throw new Error("이전 전자 증명서 서명 검증 실패");
       }
+      const prepared = await prepareResult(credential);
+      setSelectedFilename(selected.filename);
       setSource(credential);
       const payload = credential.signed.payload;
       setOnboardingId(payload.onboardingId);
@@ -154,21 +167,29 @@ export function OnboardingIssuer({ nativeAvailable, issuerReady = true }: { nati
       setPreviousRanks(payload.recognizedRanks.slice(0, -1));
       setSessionBaseline(payload.currentRankSessionBaseline === null ? "" : String(payload.currentRankSessionBaseline));
       setKataBaselines(payload.kataBaselines);
-      await renderResult(credential, json);
-      setMessage("이전 JSON을 검증했습니다. 기존 출력은 재전달용이며, 정정 발급 시 정정 차수가 증가합니다.");
+      commitResult(credential, json, prepared);
+      const message = "이전 JSON을 검증했습니다. 기존 출력은 재전달용이며, 정정 발급 시 정정 차수가 증가합니다.";
+      setImportMessage(message); report(message, true, credential);
     } catch (error) {
       const presented = issuerFailure(error, "이전 전자 증명서를 불러오지 못했습니다.");
-      setMessage(presented.message);
+      setImportMessage(presented.message); report(presented.message, false);
       setTechnicalDiagnostic(presented.diagnostic);
     } finally {
       setBusy(false);
     }
   }
 
-  async function selectPrevious(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = "";
-    if (file) await loadPrevious(file);
+  async function selectPrevious() {
+    if (busy || !fileInputRef.current) return;
+    setBusy(true);
+    try {
+      const selected = await openCredentialFile(fileInputRef.current);
+      if (selected) await loadPrevious(selected);
+    } catch (error) {
+      const presented = issuerFailure(error, "JSON 파일을 읽지 못했습니다.");
+      setImportMessage(presented.message); report(presented.message, false);
+      setTechnicalDiagnostic(presented.diagnostic);
+    } finally { setBusy(false); }
   }
 
   async function saveQr() {
@@ -205,9 +226,10 @@ export function OnboardingIssuer({ nativeAvailable, issuerReady = true }: { nati
     <p>한 명의 회원 정보·인정 단급 및 이력·기준 수련기록만 일회성으로 발급하며 회원명부를 저장하지 않습니다.</p>
     <div className="credential-file-import">
       <div><strong>기존 회원 초기등록 전자 증명서 JSON 검증·불러오기</strong><p>저장한 JSON 파일을 선택하면 서명을 검증하고 정정 발급 입력을 준비합니다.</p></div>
-      <input ref={fileInputRef} className="visually-hidden" type="file" accept="application/json,.json" disabled={busy} onChange={event => void selectPrevious(event)} />
-      <button className="ghost" type="button" disabled={busy} onClick={() => fileInputRef.current?.click()}><FileUp />JSON 파일 선택</button>
+      <input ref={fileInputRef} className="visually-hidden" type="file" accept="application/json,.json" disabled={busy} />
+      <button className="ghost" type="button" disabled={busy} onClick={() => void selectPrevious()}><FileUp />JSON 파일 선택</button>
       <span className="credential-selected-file">{selectedFilename}</span>
+      <IssuerStatus message={importMessage} failed={failed} />
     </div>
     <div className="credential-form">
       <label><span>성명</span><input value={name} onChange={event => setName(event.target.value)} /></label>
@@ -258,7 +280,7 @@ export function OnboardingIssuer({ nativeAvailable, issuerReady = true }: { nati
     </button>
     {!issuerReady && <p className="credential-help">운영용 서명 키 준비가 완료되면 발급할 수 있습니다.</p>}
     {source && <button className="ghost full" type="button" disabled={!outputJson || busy} onClick={() => void renderResult(source, JSON.stringify(source))}>기존 JSON·링크 그대로 재전달</button>}
-    <p role="status">{message}</p>
+    <IssuerStatus message={message} failed={failed} />
     {technicalDiagnostic && <details className="credential-technical"><summary>기술 진단</summary><code>{technicalDiagnostic}</code></details>}
     {output && <section className="credential-result" aria-label="기존 회원 초기등록 발급 결과"><button className="credential-result-toggle" type="button" aria-expanded={resultOpen} onClick={() => setResultOpen(open => !open)}>{resultOpen ? <ChevronUp /> : <ChevronDown />}{resultOpen ? "발급 결과 접기" : "발급 결과 펼치기"}</button>{resultOpen && <div className="credential-result-body"><details className="credential-technical"><summary>자동 생성 기술 정보</summary><dl className="credential-diagnostics">
       <div><dt>초기등록 ID (onboardingId)</dt><dd>{output.signed.payload.onboardingId}</dd></div>

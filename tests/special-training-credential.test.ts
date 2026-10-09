@@ -247,7 +247,7 @@ test("Saved Special-training QR adds module-relative white padding without chang
 
 test("legacy v1 issuer remains byte-compatible while v2 reuses the production signing path", async () => {
   const bridge = await readFile(new URL("../android/CredentialIssuerBridge.java", import.meta.url), "utf8");
-  const issuerPage = await readFile(new URL("../app/credential-issuer/page.tsx", import.meta.url), "utf8");
+  const issuerPage = await readFile(new URL("../app/credential-issuer/issuer-workspace.tsx", import.meta.url), "utf8");
   const v2Issuer = await readFile(new URL("../app/credential-issuer/special-training-v2-issuer.tsx", import.meta.url), "utf8");
   assert.match(bridge, /issueSpecialTrainingCredential/);
   assert.match(bridge, /run\("issue-special-training"/);

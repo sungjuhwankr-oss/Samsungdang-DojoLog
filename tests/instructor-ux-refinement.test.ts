@@ -20,8 +20,8 @@ test('memo projection filters whitespace and sorts by lesson date rather than in
   assert.equal(filterJournal(records,'all',''),records);
   assert.deepEqual(filterJournal(records,'search','메모').map(item=>item.id),['old','new','same']);
   assert.deepEqual(records,before);
-  assert.match(page,/journalMode!=="memo"&&<button className="session-order-button"/);
-  assert.match(page,/journalMode!=="memo"&&sessionOrder&&/);
+  assert.match(page,/journalMode==="all"&&<button className="session-order-button"/);
+  assert.match(page,/journalMode==="all"&&sessionOrder&&/);
 });
 
 test('confirmed reset creates all fresh draft fields once and never changes saved journals',()=>{

@@ -293,10 +293,10 @@ test("production bridge uses idempotent alias semantics and has no deletion path
 });
 
 test("issuer UI keeps Membership disabled and adds stateless test-only Promotion issuance", async () => {
-  const issuerPage = await readFile(new URL("../app/credential-issuer/page.tsx", import.meta.url), "utf8");
+  const issuerPage = await readFile(new URL("../app/credential-issuer/issuer-workspace.tsx", import.meta.url), "utf8");
   const homePage = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   assert.match(homePage, /<strong>회원·수련 인증<\/strong>/);
-  assert.match(homePage, /<CredentialIssuerPage embedded active=\{view==="credential"\}\/>/);
+  assert.match(homePage, /<CredentialIssuerPage embedded active=\{view==="credential"&&active\}\/>/);
   assert.match(issuerPage, /테스트회원 \(실제 회원 아님\)/);
   assert.match(issuerPage, /memberId: "ASD-000"/);
   assert.match(issuerPage, /실제 회원 전자 증명서 발급 — 운영 승인 전 비활성/);

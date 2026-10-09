@@ -1,9 +1,11 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- generated QR data URL */
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileDown, FileUp, QrCode, RefreshCw } from "lucide-react";
 
+import { openCredentialFile } from "../credential-file";
+import { IssuerStatus, type OutcomeReporter } from "./workspace";
 import { saveBackupFile } from "../backup-file";
 import {
   generateSpecialTrainingEventId,
@@ -29,13 +31,13 @@ import {
 } from "../special-training-output";
 import { issuerFailure, koreanInputErrors } from "./presentation";
 
-type Props = { nativeAvailable: boolean; bootstrap: TrustedKeyBootstrap | null; keyReadiness?: "checking" | "ready" | "error" | "unsupported" };
+type Props = { nativeAvailable: boolean; bootstrap: TrustedKeyBootstrap | null; keyReadiness?: "checking" | "ready" | "error" | "unsupported"; onOutcome?: OutcomeReporter };
 
 function firstSession(): SpecialTrainingSession {
   return { sessionId: generateSpecialTrainingSessionId(), date: "2026-10-24", label: "오전 수련" };
 }
 
-export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap, keyReadiness = bootstrap ? "ready" : "checking" }: Props) {
+export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap, keyReadiness = bootstrap ? "ready" : "checking", onOutcome }: Props) {
   const [payload, setPayload] = useState<SpecialTrainingV2Payload>(() => ({
     eventId: "",
     revision: 1,
@@ -53,6 +55,8 @@ export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap, keyReadine
   const [link, setLink] = useState("");
   const [qr, setQr] = useState("");
   const [message, setMessage] = useState("");
+  const [failed, setFailed] = useState(false);
+  const [importMessage, setImportMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [importJson, setImportJson] = useState("");
   const [selectedFilename, setSelectedFilename] = useState("선택된 파일 없음");
@@ -72,6 +76,11 @@ export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap, keyReadine
     return () => window.clearTimeout(timer);
   }, []);
 
+  const report = (message: string, success: boolean, signed?: SpecialTrainingV2Credential["signed"]) => {
+    setMessage(message); setFailed(!success);
+    onOutcome?.({ workspace: "special-v2", label: "특별수련 인증서 발급", message, success,
+      credentialId: signed?.credentialId, keyId: signed?.keyId });
+  };
   const replacePayload = (change: Partial<SpecialTrainingV2Payload>) => setPayload(current => ({ ...current, ...change }));
   const setSession = (index: number, field: "date" | "label", value: string) => setPayload(current => ({
     ...current,
@@ -99,10 +108,10 @@ export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap, keyReadine
       setCredentialJson(result.json);
       setLink(productionLink);
       setQr(qrDataUrl);
-      setMessage("운영용 키로 서명하고 링크와 QR의 동일 URL을 검증했습니다.");
+      report("운영용 키로 서명하고 링크와 QR의 동일 URL을 검증했습니다.", true, parsed.signed);
     } catch (error) {
       const presented = issuerFailure(error, "전자 증명서 발급에 실패했습니다.");
-      setMessage(presented.message);
+      report(presented.message, false);
       setTechnicalDiagnostic(presented.diagnostic);
     } finally {
       setBusy(false);
@@ -118,51 +127,54 @@ export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap, keyReadine
   };
 
   const prepareImportedCorrection = async () => {
-    if (!bootstrap) return;
-    setTechnicalDiagnostic(null);
+    if (!bootstrap || busy) return;
+    setBusy(true); setTechnicalDiagnostic(null);
     try {
       const parsed = JSON.parse(importJson) as { signed?: { credentialVersion?: number } };
+      let next: SpecialTrainingV2Payload;
+      let prior: Record<string, SpecialTrainingSession>;
+      let sourceId: string;
       if (parsed.signed?.credentialVersion === 1) {
         const old = parseSpecialTrainingCredential(importJson);
         if (!await verifySpecialTrainingCredential(old, bootstrap)) throw new Error("기존 v1 서명이 유효하지 않습니다.");
-        setPayload({
-          eventId: old.signed.payload.eventId,
-          revision: 1,
-          supersedesCredentialId: old.signed.credentialId,
-          title: old.signed.payload.title,
-          category: "special-training",
-          startDate: old.signed.payload.startDate,
-          endDate: old.signed.payload.endDate,
-          instructor: old.signed.payload.instructor,
+        next = {
+          eventId: old.signed.payload.eventId, revision: 1, supersedesCredentialId: old.signed.credentialId,
+          title: old.signed.payload.title, category: "special-training", startDate: old.signed.payload.startDate,
+          endDate: old.signed.payload.endDate, instructor: old.signed.payload.instructor,
           sessions: [{ ...firstSession(), date: old.signed.payload.startDate }]
-        });
-        setPriorSessions({});
+        };
+        prior = {}; sourceId = old.signed.credentialId;
       } else {
         const old = parseSpecialTrainingV2Credential(importJson);
         if (!await verifySpecialTrainingV2Credential(old, bootstrap)) throw new Error("기존 v2 서명이 유효하지 않습니다.");
-        setPayload({ ...old.signed.payload, revision: old.signed.payload.revision + 1, supersedesCredentialId: old.signed.credentialId });
-        setPriorSessions(Object.fromEntries(old.signed.payload.sessions.map(session => [session.sessionId, session])));
+        next = { ...old.signed.payload, revision: old.signed.payload.revision + 1, supersedesCredentialId: old.signed.credentialId };
+        prior = Object.fromEntries(old.signed.payload.sessions.map(session => [session.sessionId, session]));
+        sourceId = old.signed.credentialId;
       }
-      const importedEventId = parsed.signed?.credentialVersion === 1
-        ? parseSpecialTrainingCredential(importJson).signed.payload.eventId
-        : parseSpecialTrainingV2Credential(importJson).signed.payload.eventId;
-      setMemo(loadInstructorEventMemo(importedEventId)?.memo ?? "");
+      const nextMemo = loadInstructorEventMemo(next.eventId)?.memo ?? "";
+      setPayload(next); setPriorSessions(prior); setMemo(nextMemo);
       setCredential(null); setCredentialJson(""); setLink(""); setQr("");
-      setMessage("서명과 서명 키 ID를 검증한 뒤 정정 발급 입력폼을 만들었습니다.");
+      const message = "서명과 서명 키 ID를 검증한 뒤 정정 발급 입력폼을 만들었습니다. 발급은 실행하지 않았습니다.";
+      setImportMessage(message); report(message, true);
+      onOutcome?.({ workspace: "special-v2", label: "특별수련 JSON 검증", success: true, message, credentialId: sourceId, keyId: bootstrap.keyId });
     } catch (error) {
       const presented = issuerFailure(error, "기존 전자 증명서를 불러오지 못했습니다.");
-      setMessage(presented.message);
-      setTechnicalDiagnostic(presented.diagnostic);
-    }
+      setImportMessage(presented.message); report(presented.message, false); setTechnicalDiagnostic(presented.diagnostic);
+    } finally { setBusy(false); }
   };
 
-  const selectImportFile = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = "";
-    if (!file) return;
-    setSelectedFilename(file.name);
-    setImportJson(await file.text());
-    setMessage("JSON 파일을 선택했습니다. 서명 검증 후 불러오기를 실행하십시오.");
+  const selectImportFile = async () => {
+    if (busy || !importInputRef.current) return;
+    setBusy(true);
+    try {
+      const selected = await openCredentialFile(importInputRef.current);
+      if (!selected) return;
+      setSelectedFilename(selected.filename); setImportJson(selected.content);
+      setFailed(false); setImportMessage("JSON 파일을 선택했습니다. 서명 검증 후 불러오기를 실행하십시오.");
+    } catch (error) {
+      const presented = issuerFailure(error, "JSON 파일을 읽지 못했습니다.");
+      setImportMessage(presented.message); report(presented.message, false);
+    } finally { setBusy(false); }
   };
 
   const newEvent = () => {
@@ -205,19 +217,21 @@ export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap, keyReadine
     {presentedErrors.map(error => <div key={`${error.message}-${error.diagnostic ?? ""}`}><p className="credential-error">{error.message}</p>{error.diagnostic && <details className="credential-technical"><summary>기술 진단</summary><code>{error.diagnostic}</code></details>}</div>)}
     {keyReadiness !== "ready" && <p className={keyReadiness === "checking" ? "credential-help" : "credential-error"}>{keyReadiness === "checking" ? "운영용 서명 키를 확인하는 중이므로 아직 발급할 수 없습니다." : keyReadiness === "unsupported" ? "Android 설치형 앱에서만 특별수련 인증을 발급할 수 있습니다." : "운영용 서명 키 확인에 실패하여 발급할 수 없습니다."}</p>}
     <button className="primary large" type="button" disabled={!nativeAvailable || !bootstrap || busy || locked || errors.length > 0} onClick={issue}>특별수련 전자 증명서 발급</button>
-    <button className="ghost full" type="button" onClick={newEvent}><RefreshCw />새 행사 ID 생성</button>
-    {credential && <button className="ghost full" type="button" onClick={prepareCorrection}>현재 발급본 기준 정정 발급 준비</button>}
+    <IssuerStatus message={message} failed={failed} />
+    <button className="ghost full" type="button" disabled={busy} onClick={newEvent}><RefreshCw />새 행사 ID 생성</button>
+    {credential && <button className="ghost full" type="button" disabled={busy} onClick={prepareCorrection}>현재 발급본 기준 정정 발급 준비</button>}
 
     <details className="credential-disclosure">
       <summary>기존 전자 증명서(Credential v1/v2)를 검증해 정정 발급 준비</summary>
       <div className="credential-file-import">
         <div><strong>기존 특별수련 전자 증명서 JSON</strong><p>v1 또는 v2 JSON 파일을 선택한 뒤 기존 검증 절차로 정정 발급을 준비합니다.</p></div>
-        <input ref={importInputRef} className="visually-hidden" type="file" accept="application/json,.json" disabled={busy} aria-label="기존 특별수련 전자 증명서 JSON 파일 선택" onChange={event => void selectImportFile(event)} />
-        <button className="ghost" type="button" disabled={busy} onClick={() => importInputRef.current?.click()}><FileUp />JSON 파일 선택</button>
+        <input ref={importInputRef} className="visually-hidden" type="file" accept="application/json,.json" disabled={busy} aria-label="기존 특별수련 전자 증명서 JSON 파일 선택" />
+        <button className="ghost" type="button" disabled={busy} onClick={() => void selectImportFile()}><FileUp />JSON 파일 선택</button>
         <span className="credential-selected-file">{selectedFilename}</span>
       </div>
       <textarea value={importJson} onChange={event => setImportJson(event.target.value)} aria-label="기존 특별수련 전자 증명서 JSON" />
       <button className="ghost full" type="button" disabled={!bootstrap || !importJson || busy} onClick={prepareImportedCorrection}>서명 검증 후 불러오기</button>
+      <IssuerStatus message={importMessage} failed={failed} />
     </details>
 
     <label><span>지도자 행사 메모 (전자 증명서와 분리)</span><textarea value={memo} onChange={event => setMemo(event.target.value)} /></label>
@@ -227,7 +241,6 @@ export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap, keyReadine
     }}>메모 저장</button>
     <p className="credential-warning">지도자 행사 메모는 수련자용 앱으로 전송·동기화되지 않으며 현재 지도자용 Backup v1에도 포함되지 않습니다.</p>
 
-    {message && <p className="credential-status" role="status">{message}</p>}
     {technicalDiagnostic && <details className="credential-technical"><summary>기술 진단</summary><code>{technicalDiagnostic}</code></details>}
     {credential && <details className="credential-technical"><summary>발급 결과 기술 정보</summary><dl className="credential-diagnostics">
       <div><dt>전자 증명서 ID (credentialId)</dt><dd>{credential.signed.credentialId}</dd></div>

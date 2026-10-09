@@ -12,14 +12,15 @@ import { PICKER_KATAS } from "../app/plan-units";
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 const page = read("../app/page.tsx");
-const issuer = read("../app/credential-issuer/page.tsx");
+const issuer = read("../app/credential-issuer/issuer-workspace.tsx");
 const onboarding = read("../app/credential-issuer/onboarding-issuer.tsx");
 const special = read("../app/credential-issuer/special-training-v2-issuer.tsx");
 const css = `${read("../app/extra.css")}\n${read("../app/add-panel.css")}`;
 
 test("R3-01 closes only the technical-tools disclosure on credential workspace entry", () => {
-  assert.match(page, /<CredentialIssuerPage embedded active=\{view==="credential"\}/);
-  assert.match(issuer, /<details key=\{active \? "active" : "inactive"\} className="credential-legacy-tools">/);
+  assert.match(page, /<CredentialIssuerPage embedded active=\{view==="credential"&&active\}/);
+  // R4 supersedes the keyed disclosure: keep all issuer children mounted.
+  assert.match(issuer, /<CredentialWorkspace title="기술 검증 도구" active=\{active\}>/);
   assert.match(page, /credentialMounted&&<div hidden=\{view!=="credential"\}/);
   assert.doesNotMatch(`${issuer}\n${onboarding}\n${special}`, /localStorage|sessionStorage|indexedDB/i);
 });
@@ -44,9 +45,10 @@ test("R3-03 and R3-08 reuse Hombu presentation ordering without mutating identit
 });
 
 test("R3-04 resets the onboarding file input so the same JSON can be selected again", () => {
-  assert.match(onboarding, /const file = event\.currentTarget\.files\?\.\[0\]/);
-  assert.match(onboarding, /event\.currentTarget\.value = ""/);
-  assert.match(onboarding, /if \(file\) await loadPrevious\(file\)/);
+  // R4 routes both native SAF and web reselection through the shared reader.
+  assert.match(onboarding, /openCredentialFile\(fileInputRef\.current\)/);
+  assert.match(onboarding, /if \(selected\) await loadPrevious\(selected\)/);
+  assert.match(read("../app/backup-file.ts"), /input\.value = ""/);
   assert.match(onboarding, /finally \{\s*setBusy\(false\);\s*\}/);
 });
 
