@@ -17,7 +17,7 @@ export function ScrollControls(){
     let frame=0;
     const update=()=>{
       frame=0;
-      const next=document.querySelector('.credential-shell[data-active="true"]')?{top:false,bottom:false}:scrollNavigationState(document.documentElement.scrollHeight,window.innerHeight,window.scrollY);
+      const next=scrollNavigationState(document.documentElement.scrollHeight,window.innerHeight,window.scrollY);
       setVisible(previous=>previous.top===next.top&&previous.bottom===next.bottom?previous:next);
     };
     const schedule=()=>{if(!frame)frame=window.requestAnimationFrame(update)};

@@ -59,7 +59,7 @@ export function NewMembershipIssuer({ nativeAvailable, bootstrap, onOutcome }: {
     {output && <div className="credential-qr-output">
       <p>가상 테스트 전용 결과입니다. 실제 회원에게 배포하지 마십시오.</p>
       <img src={output.qr} alt="가상 신규 회원 Membership v1 테스트 QR" />
-      <button type="button" className="ghost full" onClick={async () => {
+      <button type="button" className="primary full credential-copy-url" onClick={async () => {
         try { await navigator.clipboard.writeText(output.link); setCopyFailed(false); setCopyMessage("URL 전체를 복사했습니다."); }
         catch { setCopyFailed(true); setCopyMessage("URL을 복사하지 못했습니다. 클립보드 접근을 확인해 주세요."); }
       }}>URL 전체 복사</button>

@@ -1,5 +1,5 @@
 // Separate DOM interaction gate, with no production dependency or package change.
-// node --import tsx tests/instructor-r4.dom.mjs /path/to/happy-dom/lib/index.js [Member-repo]
+// node --import tsx tests/instructor-r5.dom.mjs /path/to/happy-dom/lib/index.js [Member-repo]
 // This uses an ephemeral mock signer, never Android Keystore or actual member data.
 import assert from "node:assert/strict";
 import { pathToFileURL } from "node:url";
@@ -23,7 +23,17 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 Object.defineProperty(window, "crypto", { value: webcrypto });
 let routerTraversals = 0;
 window.addEventListener("popstate", () => { routerTraversals++; });
-window.scrollTo = () => {};
+let scrollY = 0, documentHeight = 2400;
+Object.defineProperty(window, "innerHeight", { configurable: true, value: 800 });
+Object.defineProperty(window, "scrollY", { configurable: true, get: () => scrollY });
+Object.defineProperty(document.documentElement, "scrollHeight", { configurable: true, get: () => documentHeight });
+window.scrollTo = (options, y) => {
+  scrollY = Math.max(0, Math.min(documentHeight - window.innerHeight, typeof options === "object" ? options.top : y));
+  window.dispatchEvent(new window.Event("scroll"));
+};
+const style = document.createElement("style");
+style.textContent = readFileSync(new URL("../app/extra.css", import.meta.url), "utf8");
+document.head.append(style);
 window.HTMLElement.prototype.scrollIntoView = () => {};
 window.HTMLElement.prototype.setPointerCapture = () => {};
 window.HTMLElement.prototype.hasPointerCapture = () => false;
@@ -98,6 +108,45 @@ const nav = label => click([...document.querySelectorAll(".bottom-nav button")].
 const workspace = title => [...document.querySelectorAll("details.credential-workspace")].find(element => element.querySelector("summary span").textContent === title);
 const disclose = async (title, open = true) => { const element = workspace(title); await act(async () => { element.open = open; element.dispatchEvent(new window.Event("toggle")); await tick(5); }); return element; };
 const values = scope => [...scope.querySelectorAll("input, select")].map(element => element.value);
+// Happy DOM evaluates media-query/cascade values; these are not rendered hitboxes.
+const responsiveWidths = [320, 360, 390, 480, 768];
+function assertResponsiveControls() {
+  for (const width of responsiveWidths) {
+    // Reparse the sheet because Happy DOM does not invalidate computed CSS on resize.
+    window.happyDOM.setViewport({ width, height: 800 });
+    style.textContent = style.textContent;
+    const narrow = width <= 480;
+    assert.equal(window.getComputedStyle(document.querySelector(".content")).paddingRight,
+      `calc(${narrow ? 65 : 103}px + env(safe-area-inset-right))`);
+    const rail = document.querySelector(".scroll-controls");
+    if (rail) {
+      assert.equal(window.getComputedStyle(rail).position, "fixed");
+      assert.equal(window.getComputedStyle(rail).width, narrow ? "44px" : "80px");
+    }
+    for (const control of [...document.querySelectorAll(".scroll-controls button, .management-back")].filter(visible)) {
+      const computed = window.getComputedStyle(control);
+      assert.equal(computed.minHeight, "44px");
+      if (narrow) {
+        assert.equal(computed.width, "44px"); assert.equal(computed.height, "44px");
+        assert.equal(computed.minWidth, "44px"); assert.equal(computed.boxSizing, "border-box");
+      }
+      assert.ok(["맨 위 ↑", "맨 아래 ↓", "← 관리"].includes(control.textContent.trim()));
+    }
+    if (narrow) {
+      for (const element of document.querySelectorAll(".content .edit-actions, .app-shell > .toast")) {
+        const computed = window.getComputedStyle(element);
+        // Happy DOM cannot resolve left:max()/nested safe-area math. Unit tests
+        // check those declarations and geometry; only cascade is asserted here.
+        assert.equal(computed.transform, "none");
+      }
+      for (const element of document.querySelectorAll(".content .section-head, .content .journal-title, .content .log-head, .content .curriculum-row, .content .exam-list li, .content .beginner-library article")) {
+        assert.equal(window.getComputedStyle(element).flexWrap, "wrap");
+      }
+    }
+  }
+  window.happyDOM.setViewport({ width: 1024, height: 800 });
+  style.textContent = style.textContent;
+}
 const passed = [];
 try {
   await nav("수업일지");
@@ -134,7 +183,22 @@ try {
   await nav("관리"); await click([...document.querySelectorAll(".management-menu button")][0]);
   assert.deepEqual([...document.querySelectorAll("details.credential-workspace > summary span")].map(element => element.textContent), ["신규 회원 발급", "기존 회원 초기등록", "특별수련 인증서 발급", "회원·수련 인증 결과", "기술 검증 도구"]);
   assert.ok([...document.querySelectorAll(".credential-workspace")].every(element => !element.open));
+  assert.ok(document.querySelector(".scroll-controls"), "credential workspace must retain floating scroll controls");
+  assert.equal(window.getComputedStyle(document.querySelector(".scroll-controls")).position, "fixed");
+  assert.equal(window.getComputedStyle(button("← 관리")).position, "fixed");
+  await click(button("맨 아래 ↓")); await act(async () => { await tick(30); });
+  assert.equal(scrollY, 1600);
+  assert.equal(document.querySelector(".scroll-controls").textContent.trim(), "맨 위 ↑");
+  await click(button("맨 위 ↑")); await act(async () => { await tick(30); });
+  assert.equal(scrollY, 0);
+  assert.equal(document.querySelector(".scroll-controls").textContent.trim(), "맨 아래 ↓");
+  await act(async () => { window.scrollTo({ top: 700 }); await tick(30); });
+  assert.equal(document.querySelectorAll(".scroll-controls button").length, 2);
+  await act(async () => { documentHeight = 800; window.scrollTo({ top: 0 }); await tick(30); });
   assert.equal(document.querySelector(".scroll-controls"), null);
+  await act(async () => { documentHeight = 2400; window.dispatchEvent(new window.Event("resize")); await tick(30); });
+  passed.push("D1-02 floating scroll controls remain in credentials; top/middle/bottom/short-page boundaries and scroll-only actions");
+  assertResponsiveControls();
   const onboarding = await disclose("기존 회원 초기등록");
   const originalInput = onboarding.querySelector("input");
   await disclose("기존 회원 초기등록", false); await disclose("기존 회원 초기등록"); assert.equal(onboarding.querySelector("input"), originalInput);
@@ -144,7 +208,7 @@ try {
   await click([...document.querySelectorAll(".management-menu button")][0]); await click(button("← 관리")); assert.ok(document.querySelector(".management-menu"));
   await click([...document.querySelectorAll(".management-menu button")][0]); await act(async () => { window.history.back(); await tick(20); }); assert.ok(document.querySelector(".management-menu"));
   await click([...document.querySelectorAll(".management-menu button")][0]);
-  passed.push("R4-01/04/06 five closed independent mounted workspaces, management re-tap/return/history-back, hidden scroll overlays");
+  passed.push("R4-01/04/06 five closed independent mounted workspaces, management re-tap/return/history-back, floating scroll controls retained");
 
   await disclose("기존 회원 초기등록"); const priorValues = values(onboarding);
   selected = null; await click(button("JSON 파일 선택", onboarding)); assert.deepEqual(values(onboarding), priorValues);
@@ -169,7 +233,7 @@ try {
   const correction = special.querySelector("details.credential-disclosure");
   await act(async () => { correction.open = true; correction.dispatchEvent(new window.Event("toggle")); });
   const specialCredential = await sign("special-training", { eventId: `st1_${"A".repeat(22)}`, title: "가상 특별수련", category: "seminar", startDate: "2026-10-09", endDate: null, instructor: "가상 지도자" });
-  selected = { filename: "special-v1.json", content: JSON.stringify(specialCredential) };
+  selected = { filename: "기존특별수련_" + "long-filename-".repeat(20) + ".json", content: JSON.stringify(specialCredential, null, 2) };
   const callsBeforeImport = signCalls;
   async function selectAndVerifySpecial(expected) {
     const input = button("JSON 파일 선택", special);
@@ -216,6 +280,19 @@ try {
     selected = { filename: "rejected.json", content };
     await selectAndVerifySpecial("reject"); assert.deepEqual(values(special), v2Values);
   }
+  const originalJsonBox = special.querySelector('textarea[aria-label="기존 특별수련 전자 증명서 JSON"]');
+  const longRawJson = JSON.stringify({ diagnostic: "긴원문_".repeat(4000) }, null, 2);
+  const textareaSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+  await act(async () => { textareaSetter.call(originalJsonBox, longRawJson); originalJsonBox.dispatchEvent(new window.Event("input", { bubbles: true })); await tick(10); });
+  assert.equal(originalJsonBox.value, longRawJson, "long raw JSON is preserved byte-for-byte");
+  assert.equal(window.getComputedStyle(originalJsonBox).overflow, "auto");
+  assert.equal(window.getComputedStyle(originalJsonBox).resize, "vertical");
+  assert.equal(window.getComputedStyle(originalJsonBox).width, "calc(100% - 28px)");
+  assert.equal(parseFloat(window.getComputedStyle(originalJsonBox).minWidth), 0);
+  assert.equal(window.getComputedStyle(correction.querySelector(".credential-selected-file")).overflowWrap, "anywhere");
+  await click(button("서명 검증 후 불러오기", special));
+  assert.deepEqual(values(special), v2Values); assert.equal(signCalls, callsBeforeImport);
+  passed.push("D1-04 long JSON and filename retain original text; inset textarea width, scroll and resize; fail-closed verification remains");
   passed.push("R4-05 special v1/v2 verify-only correction; invalid/wrong-kind fail closed; no issuance");
 
   const newMember = await disclose("신규 회원 발급");
@@ -265,6 +342,9 @@ try {
   await disclose("신규 회원 발급");
   const details = newMember.querySelector("details.verified-url");
   assert.equal(details.open, false); assert.equal(details.querySelector("summary").getAttribute("aria-expanded"), "false");
+  assert.ok(button("URL 전체 복사", newMember).classList.contains("primary"));
+  assert.equal(details.querySelectorAll("summary svg").length, 1);
+  assert.match(style.textContent, /\.credential-shell \.verified-url > summary::after,[\s\S]*?content: none/);
   await click(button("URL 전체 복사", newMember));
   const displayed = details.querySelector(".credential-preview").textContent;
   assert.equal(copied, displayed); assert.ok(displayed.startsWith("https://"));
@@ -277,25 +357,49 @@ try {
   assert.equal(details.querySelector("summary").getAttribute("aria-expanded"), "true");
   assert.equal(signCalls, 1); passed.push("R5-04/05 verified URL equals decoded QR and clipboard; failure and disclosure state");
 
-  // A router listener was registered before React, as Vinext does. Its handler must
-  // not receive popstate for management-owned entries; it would re-render the app.
+  // Registering a router-like listener before React must not intercept management Back.
+  const initialDocument = window.document;
+  const initialRoute = window.location.pathname;
   for (const index of [0, 1, 2]) {
     await nav("관리"); assert.ok(document.querySelector(".management-menu"));
+    const rootUrl = window.location.href;
     await click([...document.querySelectorAll(".management-menu button")][index]);
+    assertResponsiveControls();
+    const slotLength = window.history.length;
+    assert.notEqual(window.location.href, rootUrl, "WebView subview needs a distinct same-document fragment");
+    assert.equal(window.location.pathname, initialRoute);
+    for (let repeat = 0; repeat < 3; repeat++) {
+      await click(button("← 관리")); assert.ok(document.querySelector(".management-menu"));
+      assert.equal(window.location.href, rootUrl);
+      await click([...document.querySelectorAll(".management-menu button")][index]);
+      await nav("관리"); assert.ok(document.querySelector(".management-menu"));
+      assert.equal(window.location.href, rootUrl);
+      await click([...document.querySelectorAll(".management-menu button")][index]);
+      assert.equal(window.history.length, slotLength, "re-entry reuses one slot without history growth");
+    }
     await act(async () => { window.history.back(); await tick(40); });
     assert.ok(document.querySelector(".management-menu"));
+    assert.equal(window.location.href, rootUrl);
+    assert.equal(window.document, initialDocument);
+    assert.equal(document.querySelector(".bottom-nav .active").textContent.trim(), "관리");
   }
   assert.equal(routerTraversals, 0);
   await click([...document.querySelectorAll(".management-menu button")][0]);
   await disclose("신규 회원 발급"); assert.ok(newMember.querySelector("img")); assert.equal(signCalls, 1);
   assert.deepEqual(values(onboarding), verifiedValues);
   assert.deepEqual(values(special), v2Values);
-  await nav("본부 카타"); await nav("관리"); await disclose("신규 회원 발급"); assert.ok(newMember.querySelector("img"));
-  passed.push("R5-01/02 three management subviews consume same-route history and retain credential state");
+  for (const label of ["수업구성", "수업일지", "본부 카타", "삼성당 심사표", "초심자용 교본"]) {
+    await nav(label); assert.equal(document.querySelector(".bottom-nav .active").textContent.trim(), label);
+    assertResponsiveControls();
+    await nav("관리"); await disclose("신규 회원 발급"); assert.ok(newMember.querySelector("img"));
+    assert.deepEqual(values(onboarding), verifiedValues); assert.deepEqual(values(special), v2Values);
+  }
+  passed.push("D1-01 all three returns in all subviews; repeated UI returns do not traverse/grow history; five other tabs and credential state retained");
+  passed.push("D1 narrow layout media-query cascade at 320/360/390/480/768 across three management subviews and five other tabs; names and minimum touch CSS retained (not rendered geometry)");
 
   // A management-owned entry can be traversed while another top-level tab is active.
   // Returning to the management root must leave its existing Back policy intact.
-  const routeBeforeInactiveHistory = window.location.href;
+  const routeBeforeInactiveHistory = window.history.state.samsungdangManagementReturnUrl;
   const documentBeforeInactiveHistory = window.document;
   await nav("본부 카타");
   await act(async () => { window.history.back(); await tick(40); });
@@ -365,6 +469,7 @@ try {
     if (mode === "검색") await click(button("원본 수업일지 보기"));
     const card = document.querySelector('#journal-journal-0'); assert.ok(card);
     await click(card.querySelector(".edit"));
+    assertResponsiveControls();
     const note = document.querySelector('#note');
     const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
     await act(async () => { setter.call(note, "취소할 변경"); note.dispatchEvent(new window.Event("input", { bubbles: true })); await tick(10); });
@@ -372,16 +477,33 @@ try {
     assert.ok(document.querySelector('#journal-journal-0.expanded')); assert.equal(localStorage.getItem(PRIMARY_STORAGE_KEY), originalRaw);
     assert.equal(document.querySelector('#journal-journal-0 .note').textContent, "보존 메모 0");
   }
-  assert.ok(document.querySelectorAll('.scroll-inline').length === 2);
+  assert.equal(document.querySelectorAll('.scroll-inline').length, 0);
   passed.push("R5-03 cancellation returns original ID in all/memo/search without storage writes");
   // Direct /credential-issuer uses the same management shell without a reload.
   const { default: DirectIssuer } = await import("../app/credential-issuer/page.tsx");
-  await act(async () => { root.render(React.createElement(DirectIssuer)); await tick(30); });
+  await act(async () => root.unmount());
+  window.history.replaceState({}, "", "/credential-issuer");
+  const directRoot = createRoot(rootElement);
+  await act(async () => { directRoot.render(React.createElement(DirectIssuer)); await tick(30); });
   assert.equal(document.querySelectorAll("details.credential-workspace").length, 5);
   const directInput = document.querySelector(".credential-form input");
   await click(button("← 관리")); assert.ok(document.querySelector(".management-menu"));
   await click([...document.querySelectorAll(".management-menu button")][0]);
   assert.equal(document.querySelector(".credential-form input"), directInput);
-  passed.push("R4-04 direct issuer route shares mounted management shell and retains input on menu return");
+  await nav("관리"); assert.ok(document.querySelector(".management-menu"));
+  await click([...document.querySelectorAll(".management-menu button")][0]);
+  const directRouterBefore = routerTraversals;
+  await act(async () => { window.history.back(); await tick(40); });
+  assert.ok(document.querySelector(".management-menu"));
+  assert.equal(routerTraversals, directRouterBefore);
+  assert.equal(window.location.pathname, "/credential-issuer");
+  await click([...document.querySelectorAll(".management-menu button")][0]);
+  assert.equal(document.querySelector(".credential-form input"), directInput);
+  // A real path change belongs to the router even while a management slot is owned.
+  window.history.pushState({}, "", "/other-route");
+  window.dispatchEvent(new window.PopStateEvent("popstate", { state: window.history.state }));
+  assert.equal(routerTraversals, directRouterBefore + 1);
+  await act(async () => directRoot.unmount());
+  passed.push("D1-01 direct /credential-issuer keeps input through all returns and does not swallow another route");
   console.log(JSON.stringify({ status: "PASS", count: passed.length, passed, openCalls, signCalls, scope: "Happy DOM + ephemeral mock native signer; not Android/Fold8" }, null, 2));
 } finally { await act(async () => root.unmount()); await window.happyDOM.close(); }

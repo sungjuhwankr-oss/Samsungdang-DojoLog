@@ -384,7 +384,7 @@
 }
 .credential-form {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: 9px;
 }
 .credential-form label {
@@ -405,7 +405,7 @@
   background: #fff;
 }
 .credential-form-special {
-  grid-template-columns: 1fr 1.4fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr);
 }
 .credential-help,
 .credential-technical p,
@@ -1432,12 +1432,31 @@
 .session-order-actions { flex-wrap: wrap; }
 .credential-file-import > [role="status"], .credential-file-import > [role="alert"] { grid-column: 1 / -1; }
 
-/* R5: navigation lives in document flow so controls never cover actions. */
+/* D1: reserve a right-hand rail for floating controls at every scroll position.
+   Padding only at the document bottom would still cover QR/inputs mid-scroll. */
+.content { padding-left: max(15px, env(safe-area-inset-left)); padding-right: calc(103px + env(safe-area-inset-right)); }
+.content > *, .management-workspace, .credential-embedded,
+.credential-shell, .credential-workspace, .credential-workspace-body,
+.credential-section, .credential-section > *, .credential-form > *,
+.credential-file-import > * { min-width: 0; }
+.scroll-controls, .management-back, .help-toc-fab {
+  right: max(8px, env(safe-area-inset-right), calc((100vw - 760px) / 2 + 8px));
+  width: 80px;
+}
+.scroll-controls button, .management-back, .help-toc-fab {
+  min-height: 44px; padding: 8px 4px; font-size: .75rem;
+}
+.management-back { left: auto; margin: 0; }
 .management-workspace:has(.management-back) { padding-bottom: 0; }
-.management-back { position: static; align-self: flex-start; margin: 0 0 12px; }
-.scroll-controls { display: none; }
-.scroll-inline { display: flex; gap: 8px; max-width: 730px; margin: 8px auto; padding: 0 max(16px, env(safe-area-inset-left)) 0 max(16px, env(safe-area-inset-right)); }
-.scroll-inline button { min-height: 44px; padding: 8px 14px; border: 1px solid #9eb9aa; border-radius: 12px; background: #fff; color: var(--green); font-weight: 800; }
+.help-screen .help-toc-fab { bottom: calc(232px + env(safe-area-inset-bottom)); }
+.scroll-controls button:focus-visible, .management-back:focus-visible,
+.credential-shell summary:focus-visible, .credential-copy-url:focus-visible {
+  outline: 2px solid var(--green); outline-offset: 2px;
+}
+@media (min-width: 700px) {
+  .management-back { bottom: calc(102px + env(safe-area-inset-bottom)); }
+  .help-screen .help-toc-fab { bottom: calc(252px + env(safe-area-inset-bottom)); }
+}
 .verified-url, .credential-disclosure { border: 1px solid #8eac9a; border-radius: 14px; background: #edf5ef; padding: 0; }
 .verified-url > summary, .credential-disclosure > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 12px 14px; color: #173f32; font-size: .9rem; font-weight: 800; list-style: none; cursor: pointer; }
 .verified-url > summary::-webkit-details-marker, .credential-disclosure > summary::-webkit-details-marker { display: none; }
@@ -1445,3 +1464,51 @@
 .verified-url[open] > summary svg, .credential-disclosure[open] > summary svg { transform: rotate(180deg); }
 .verified-url > :not(summary), .credential-disclosure > :not(summary) { margin: 10px 14px 14px; }
 .verified-url .credential-preview { max-width: calc(100% - 28px); overflow-wrap: anywhere; word-break: break-all; }
+
+/* The copy action is primary; verified URL/signature details are supplementary. */
+.credential-copy-url { min-height: 48px; font-weight: 850; }
+.credential-shell .verified-url { border-color: var(--line); background: #f5f7f6; }
+.credential-shell .verified-url > summary { color: #52615a; font-weight: 600; font-size: .8rem; }
+.credential-shell .verified-url > summary::after,
+.credential-shell .credential-disclosure > summary::after { content: none; }
+
+/* Bound nested flex/grid items without clipping JSON, filenames or diagnostics. */
+.credential-shell { overflow-wrap: anywhere; }
+.credential-file-import { grid-template-columns: auto minmax(0, 1fr); }
+.credential-form input, .credential-shell textarea { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.credential-shell textarea { width: 100%; overflow: auto; resize: vertical; }
+.credential-disclosure > :not(summary) { max-width: calc(100% - 28px); }
+.credential-disclosure > textarea { display: block; width: calc(100% - 28px); }
+.credential-disclosure > button.full { width: calc(100% - 28px); }
+@media (max-width: 600px) {
+  .credential-form, .credential-form-special, .credential-file-import { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* D1 narrow-screen refinement: 44px controls + 8px outer inset + 13px gap.
+   At 320px, 15px left + 65px right leaves 240px of content before safe areas.
+   Full text remains in each button, so its accessible name is unchanged. */
+@media (max-width: 480px) {
+  .content { padding-right: calc(65px + env(safe-area-inset-right)); overflow-wrap: anywhere; }
+  .scroll-controls, .management-back, .help-toc-fab { width: 44px; }
+  .scroll-controls button, .management-back, .help-toc-fab {
+    box-sizing: border-box; width: 44px; min-width: 44px; height: 44px;
+    min-height: 44px; padding: 2px; font-size: .6875rem; line-height: 1.1;
+  }
+  .content .section-head, .content .journal-title, .content .log-head,
+  .content .curriculum-row, .content .exam-list li,
+  .content .beginner-library article { flex-wrap: wrap; }
+  .content .section-head > *, .content .journal-title > *, .content .log-head > *,
+  .content .curriculum-row > *, .content .exam-list li > *,
+  .content .beginner-library article > * { min-width: 0; max-width: 100%; }
+  .content input, .content textarea, .content select { min-width: 0; max-width: 100%; }
+  .content .kata-card { grid-template-columns: 32px minmax(0, 1fr) 32px; }
+  .content .analysis-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Fixed edit actions and transient status must also respect the control rail. */
+  .content .edit-actions, .app-shell > .toast {
+    left: max(15px, env(safe-area-inset-left));
+    width: calc(100% - max(15px, env(safe-area-inset-left)) - 65px - env(safe-area-inset-right));
+    transform: none;
+  }
+  .content .edit-actions { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); }
+  .app-shell > .toast { bottom: calc(84px + env(safe-area-inset-bottom)); }
+}

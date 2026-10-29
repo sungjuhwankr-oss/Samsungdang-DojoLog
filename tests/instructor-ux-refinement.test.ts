@@ -112,3 +112,77 @@ test('scroll commands preserve input/draft/route/storage state and request smoot
   assert.match(component,/ResizeObserver/);assert.match(component,/MutationObserver/);
   assert.match(page,/label="목차 ↑"/);
 });
+
+test('D1 management UI returns reuse one fragment slot without traversing or growing history', async()=>{
+  const {enterManagementHistory,leaveManagementHistory,isManagementHistory}=await import('../app/management-navigation');
+  const rootUrl='https://dojo.example/credential-issuer?mode=test#original';
+  const base={router:'preserved'};
+  let href=rootUrl, pushes=0, replacements=0, backs=0;
+  const history={state:base as Record<string,unknown>,
+    pushState(state:Record<string,unknown>,_title:string,url?:string|URL|null){pushes++;this.state=state;href=String(url??href)},
+    replaceState(state:Record<string,unknown>,_title:string,url?:string|URL|null){replacements++;this.state=state;href=String(url??href)},
+    back(){backs++}};
+  for(let repeat=0;repeat<5;repeat++){
+    enterManagementHistory(history,href);assert.equal(isManagementHistory(history),true);
+    assert.equal(new URL(href).pathname,new URL(rootUrl).pathname);assert.notEqual(href,rootUrl);
+    enterManagementHistory(history,href);assert.equal(pushes,1);
+    leaveManagementHistory(history,true);assert.equal(href,rootUrl);assert.equal(isManagementHistory(history),false);
+    leaveManagementHistory(history,true);assert.equal(backs,0);
+    assert.equal(history.state.router,'preserved');
+  }
+  assert.equal(pushes,1);assert.equal(replacements,9);assert.deepEqual(base,{router:'preserved'});
+});
+
+test('D1 floating rail, safe areas, touch targets and JSON inset widths survive the final CSS cascade',()=>{
+  const css=readFileSync(new URL('../app/extra.css',import.meta.url),'utf8');
+  const component=readFileSync(new URL('../app/scroll-controls.tsx',import.meta.url),'utf8');
+  assert.doesNotMatch(css,/\.scroll-controls\s*\{\s*display:\s*none/);
+  assert.doesNotMatch(css,/\.management-back\s*\{\s*position:\s*static/);
+  assert.doesNotMatch(component,/credential-shell.*top:false/);
+  assert.match(css,/\.content\s*\{[^}]*padding-right: calc\(103px \+ env\(safe-area-inset-right\)\)/);
+  assert.match(css,/\.scroll-controls button, \.management-back, \.help-toc-fab\s*\{\s*min-height: 44px/);
+  assert.match(css,/\.credential-disclosure > textarea\s*\{[^}]*width: calc\(100% - 28px\)/);
+  assert.match(css,/\.credential-shell textarea\s*\{[^}]*overflow: auto; resize: vertical/);
+  assert.match(css,/\.credential-file-import\s*\{\s*grid-template-columns: auto minmax\(0, 1fr\)/);
+  // Rail horizontal geometry for narrow/wide portrait and landscape, with safe-area insets.
+  for(const width of [320,360,390,480,481,690,700,768,900,1200])for(const safeRight of [0,24])for(const safeLeft of [0,24]){
+    const narrow=width<=480,controlWidth=narrow?44:80,rightPadding=narrow?65:103;
+    const right=Math.max(8,safeRight,(width-760)/2+8),railLeft=width-right-controlWidth;
+    const contentRight=(width+Math.min(width,760))/2-rightPadding-safeRight;
+    const contentWidth=Math.min(width,760)-Math.max(15,safeLeft)-rightPadding-safeRight;
+    assert.ok(railLeft-contentRight>=7);
+    assert.ok(width-right<=width-safeRight);
+    if(narrow&&!safeLeft&&!safeRight)assert.ok(contentWidth>=240);
+    assert.equal(contentWidth,Math.min(width,760)-15-rightPadding-safeRight-Math.max(0,safeLeft-15));
+  }
+  // Both scroll controls are 44px high with a 6px gap, above management and the nav.
+  for(const wide of [false,true])for(const safeBottom of [0,24]){
+    const scrollBottom=(wide?152:132)+safeBottom,managementBottom=(wide?102:82)+safeBottom;
+    assert.equal(scrollBottom-(managementBottom+44),6);
+    assert.ok(managementBottom>(wide?86:72)+safeBottom);
+    assert.equal((wide?252:232)+safeBottom-(scrollBottom+94),6);
+  }
+});
+
+
+test('D1 narrow-screen widths recover 38px while desktop rail and full control names remain intact',()=>{
+  const css=readFileSync(new URL('../app/extra.css',import.meta.url),'utf8');
+  const narrow=css.slice(css.indexOf('/* D1 narrow-screen refinement:'));
+  assert.match(narrow,/@media \(max-width: 480px\)/);
+  assert.match(narrow,/padding-right: calc\(65px \+ env\(safe-area-inset-right\)\)/);
+  assert.match(narrow,/box-sizing: border-box; width: 44px; min-width: 44px; height: 44px/);
+  assert.match(narrow,/min-height: 44px/);
+  assert.match(narrow,/\.content \.beginner-library article \{ flex-wrap: wrap/);
+  assert.match(narrow,/\.content \.edit-actions, \.app-shell > \.toast/);
+  assert.match(narrow,/left: max\(15px, env\(safe-area-inset-left\)\)/);
+  assert.match(narrow,/width: calc\(100% - max\(15px, env\(safe-area-inset-left\)\) - 65px - env\(safe-area-inset-right\)\)/);
+  assert.doesNotMatch(narrow,/overflow:\s*hidden|text-overflow|display:\s*none|font-size:\s*0/);
+  const expected=[[320,202,240],[360,242,280],[390,272,310],[480,362,400],[768,642,642]];
+  for(const [width,before,after]of expected){
+    assert.equal(Math.min(width,760)-15-103,before);
+    assert.equal(Math.min(width,760)-15-(width<=480?65:103),after);
+  }
+  const component=readFileSync(new URL('../app/scroll-controls.tsx',import.meta.url),'utf8');
+  for(const name of ['맨 위 ↑','맨 아래 ↓'])assert.ok(component.includes(name));
+  assert.match(page,/className="management-back" onClick=\{returnToMenu\}>← 관리/);
+});
