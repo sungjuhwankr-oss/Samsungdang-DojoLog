@@ -1431,3 +1431,17 @@
 .credential-workspace-body { display: flex; flex-direction: column; gap: 14px; padding: 0 10px 10px; }
 .session-order-actions { flex-wrap: wrap; }
 .credential-file-import > [role="status"], .credential-file-import > [role="alert"] { grid-column: 1 / -1; }
+
+/* R5: navigation lives in document flow so controls never cover actions. */
+.management-workspace:has(.management-back) { padding-bottom: 0; }
+.management-back { position: static; align-self: flex-start; margin: 0 0 12px; }
+.scroll-controls { display: none; }
+.scroll-inline { display: flex; gap: 8px; max-width: 730px; margin: 8px auto; padding: 0 max(16px, env(safe-area-inset-left)) 0 max(16px, env(safe-area-inset-right)); }
+.scroll-inline button { min-height: 44px; padding: 8px 14px; border: 1px solid #9eb9aa; border-radius: 12px; background: #fff; color: var(--green); font-weight: 800; }
+.verified-url, .credential-disclosure { border: 1px solid #8eac9a; border-radius: 14px; background: #edf5ef; padding: 0; }
+.verified-url > summary, .credential-disclosure > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 12px 14px; color: #173f32; font-size: .9rem; font-weight: 800; list-style: none; cursor: pointer; }
+.verified-url > summary::-webkit-details-marker, .credential-disclosure > summary::-webkit-details-marker { display: none; }
+.verified-url > summary svg, .credential-disclosure > summary svg { flex: none; width: 20px; height: 20px; }
+.verified-url[open] > summary svg, .credential-disclosure[open] > summary svg { transform: rotate(180deg); }
+.verified-url > :not(summary), .credential-disclosure > :not(summary) { margin: 10px 14px 14px; }
+.verified-url .credential-preview { max-width: calc(100% - 28px); overflow-wrap: anywhere; word-break: break-all; }

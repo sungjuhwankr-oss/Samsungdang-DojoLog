@@ -58,7 +58,16 @@ test('Home reset applies every draft field and preserves edit cancellation and j
   }
   assert.doesNotMatch(reset,/setLogs|setLastSession|localStorage|sessionStorage/);
   assert.match(page,/!editingId&&<DraftResetButton onReset=\{resetEditor\}\/>/);
-  assert.match(page,/<button className="ghost" onClick=\{resetEditor\}><X\/>수정 취소<\/button>/);
+  assert.match(page,/<button className="ghost" onClick=\{cancelLogEdit\}><X\/>수정 취소<\/button>/);
+  const cancel=page.slice(page.indexOf('function cancelLogEdit()'),page.indexOf('function deleteLog('));
+  assert.match(cancel,/const originalId=editingId;\s*resetEditor\(\)/);
+  assert.match(cancel,/if\(originalId\)\{setTab\("logs"\);\s*openOriginalLog\(originalId\)/);
+  assert.doesNotMatch(cancel,/setLogs|setLastSession|localStorage|sessionStorage|save\(|deleteLog\(|saveSessionOrder\(/);
+  const original=page.slice(page.indexOf('function openOriginalLog('),page.indexOf('function jumpToCategory('));
+  assert.match(original,/function openOriginalLog\(id:string\)/);
+  assert.match(original,/setJournalMode\("all"\);\s*setExpandedId\(id\)/);
+  assert.match(original,/getElementById\(`journal-\$\{id\}`\)/);
+  assert.doesNotMatch(original,/setLogs|setLastSession|localStorage|sessionStorage|save\(|deleteLog\(|saveSessionOrder\(/);
 });
 
 test('replacement technical group order is exact and each group follows existing Hombu presentation',()=>{

@@ -1,6 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- generated QR */
 import { useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { saveBackupFile } from "../backup-file";
 import { savePngImage } from "../session-share-file";
 import { membershipInputErrors, type MembershipInput, type TrustedKeyBootstrap } from "../credential-v1";
@@ -16,6 +17,9 @@ export function NewMembershipIssuer({ nativeAvailable, bootstrap, onOutcome }: {
   const [message, setMessage] = useState("");
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [copyMessage, setCopyMessage] = useState("");
+  const [copyFailed, setCopyFailed] = useState(false);
   const inFlight = useRef(false);
   const errors = koreanInputErrors(membershipInputErrors(input));
   const allowed = isNewMemberTestProfile(input);
@@ -50,12 +54,17 @@ export function NewMembershipIssuer({ nativeAvailable, bootstrap, onOutcome }: {
     <IssuerStatus message={message} failed={failed} />
     <button type="button" className="ghost full" disabled={busy} onClick={() => {
       if (output && !window.confirm("현재 테스트 결과를 닫고 다음 가상 테스트를 준비하시겠습니까?")) return;
-      setInput({ ...NEW_MEMBER_TEST_PROFILE }); setOutput(null); setMessage(""); setFailed(false);
+      setInput({ ...NEW_MEMBER_TEST_PROFILE }); setOutput(null); setDetailsOpen(false); setMessage(""); setFailed(false); setCopyMessage(""); setCopyFailed(false);
     }}>가상 고정 테스트 입력으로 준비</button>
     {output && <div className="credential-qr-output">
       <p>가상 테스트 전용 결과입니다. 실제 회원에게 배포하지 마십시오.</p>
       <img src={output.qr} alt="가상 신규 회원 Membership v1 테스트 QR" />
-      <details className="credential-technical"><summary>검증된 URL·서명 정보</summary><p className="credential-preview">{output.link}</p><p>{output.credential.signed.credentialId} · {output.credential.signed.keyId}</p></details>
+      <button type="button" className="ghost full" onClick={async () => {
+        try { await navigator.clipboard.writeText(output.link); setCopyFailed(false); setCopyMessage("URL 전체를 복사했습니다."); }
+        catch { setCopyFailed(true); setCopyMessage("URL을 복사하지 못했습니다. 클립보드 접근을 확인해 주세요."); }
+      }}>URL 전체 복사</button>
+      <IssuerStatus message={copyMessage} failed={copyFailed} />
+      <details className="credential-technical verified-url" onToggle={event => setDetailsOpen(event.currentTarget.open)}><summary aria-expanded={detailsOpen}><span>검증된 URL·서명 정보</span><ChevronDown aria-hidden="true" /></summary><p className="credential-preview">{output.link}</p><p>{output.credential.signed.credentialId} · {output.credential.signed.keyId}</p></details>
       <button type="button" className="ghost full" onClick={async () => {
         try { await saveBackupFile("Samsungdang-DojoLog-R4-new-member-TEST-ONLY.json", output.json); }
         catch (error) { setFailed(true); setMessage(issuerFailure(error, "테스트 JSON 저장 실패").message); }

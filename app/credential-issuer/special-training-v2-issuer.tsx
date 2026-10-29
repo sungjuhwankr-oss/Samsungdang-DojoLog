@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element -- generated QR data URL */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, FileDown, FileUp, QrCode, RefreshCw } from "lucide-react";
+import { ChevronDown, Download, FileDown, FileUp, QrCode, RefreshCw } from "lucide-react";
 
 import { openCredentialFile } from "../credential-file";
 import { IssuerStatus, type OutcomeReporter } from "./workspace";
@@ -222,7 +222,7 @@ export function SpecialTrainingV2Issuer({ nativeAvailable, bootstrap, keyReadine
     {credential && <button className="ghost full" type="button" disabled={busy} onClick={prepareCorrection}>현재 발급본 기준 정정 발급 준비</button>}
 
     <details className="credential-disclosure">
-      <summary>기존 전자 증명서(Credential v1/v2)를 검증해 정정 발급 준비</summary>
+      <summary><span>기존 특별수련 JSON 검증·정정 발급 준비</span><ChevronDown aria-hidden="true" /></summary><p>기존 v1 또는 v2 파일을 선택하고 서명을 검증합니다. 이 단계에서는 발급하지 않습니다.</p>
       <div className="credential-file-import">
         <div><strong>기존 특별수련 전자 증명서 JSON</strong><p>v1 또는 v2 JSON 파일을 선택한 뒤 기존 검증 절차로 정정 발급을 준비합니다.</p></div>
         <input ref={importInputRef} className="visually-hidden" type="file" accept="application/json,.json" disabled={busy} aria-label="기존 특별수련 전자 증명서 JSON 파일 선택" />

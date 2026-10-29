@@ -377,12 +377,12 @@ export default function CredentialIssuerPage({ embedded = false, active = true }
           운영용 서명 키 준비·조회
         </button>
         <p className={effectiveKeyReadiness === "error" || effectiveKeyReadiness === "unsupported" ? "credential-error" : "credential-status"} role="status">{effectiveKeyReadiness === "checking" ? "운영용 서명 키를 확인하는 중입니다." : effectiveKeyReadiness === "ready" ? "운영용 서명 키 준비가 완료되었습니다." : effectiveKeyReadiness === "error" ? "운영용 서명 키를 확인하지 못했습니다. 다시 확인하십시오." : "Android 설치형 앱에서만 운영용 서명 키를 사용할 수 있습니다."}</p>
-        {bootstrap && <dl className="credential-diagnostics">
-          <div><dt>서명 키 ID (keyId)</dt><dd>{bootstrap.keyId}</dd></div>
+        {bootstrap && <><dl className="credential-diagnostics"><div><dt>서명 키 ID (keyId)</dt><dd>{bootstrap.keyId}</dd></div></dl>
+        <details className="credential-technical"><summary>서명 키 기술 정보</summary><dl className="credential-diagnostics">
           <div><dt>상태</dt><dd>{bootstrap.generatedOrReused === "generated" ? "생성" : "재사용"}</dd></div>
           <div><dt>공개키</dt><dd>{bootstrap.publicKeyByteLength} bytes · {bootstrap.publicKeyFormat}</dd></div>
           <div><dt>개인키</dt><dd>getEncoded() == null</dd></div>
-        </dl>}
+        </dl></details></>}
         <p className="credential-help">기존 키가 있으면 재사용하고, 없으면 새 서명 키를 생성합니다.</p>
         {bootstrap && <p className="credential-help">서명 키 ID는 자동으로 조회되므로 직접 입력할 필요가 없습니다.</p>}
         <button className="ghost full" type="button" disabled={!bootstrapJson || busy} onClick={() => exportJson(BOOTSTRAP_FILENAME, bootstrapJson)}>
