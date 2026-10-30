@@ -34,6 +34,19 @@ window.scrollTo = (options, y) => {
 const style = document.createElement("style");
 style.textContent = readFileSync(new URL("../app/extra.css", import.meta.url), "utf8");
 document.head.append(style);
+const nativeActivitySource = readFileSync(new URL("../android/SaveActivity.java", import.meta.url), "utf8");
+assert.match(nativeActivitySource, /public void onBackPressed\(\)/);
+assert.match(nativeActivitySource, /if \(target == null \|\| !isTrustedAppPage\(\)\)/);
+assert.match(nativeActivitySource, /samsungdang-android-back/);
+assert.match(nativeActivitySource, /androidBackPending/);
+assert.match(nativeActivitySource, /SaveActivity\.super\.onBackPressed\(\)/);
+assert.match(nativeActivitySource, /ANDROID_BACK_TIMEOUT_MS = 1500L/);
+assert.match(nativeActivitySource, /target\.postDelayed\(/);
+assert.match(nativeActivitySource, /androidBackGeneration == requestGeneration/);
+assert.match(nativeActivitySource, /if \(!androidBackPending \|\| androidBackGeneration != requestGeneration\) return;/);
+const watchdogSource = nativeActivitySource.split("// A missing WebView callback")[1]?.split("}, ANDROID_BACK_TIMEOUT_MS)")[0];
+assert.ok(watchdogSource, "native Back watchdog must exist");
+assert.doesNotMatch(watchdogSource, /super\.onBackPressed\(/, "watchdog must never navigate when JavaScript might have handled Back");
 window.HTMLElement.prototype.scrollIntoView = () => {};
 window.HTMLElement.prototype.setPointerCapture = () => {};
 window.HTMLElement.prototype.hasPointerCapture = () => false;
@@ -105,6 +118,11 @@ const click = async element => {
   }
 };
 const nav = label => click([...document.querySelectorAll(".bottom-nav button")].find(element => element.textContent.trim() === label));
+const nativeBackRequest = async () => {
+  const detail = { handled: false };
+  await act(async () => { window.dispatchEvent(new window.CustomEvent("samsungdang-android-back", { detail })); await tick(20); });
+  return detail.handled;
+};
 const workspace = title => [...document.querySelectorAll("details.credential-workspace")].find(element => element.querySelector("summary span").textContent === title);
 const disclose = async (title, open = true) => { const element = workspace(title); await act(async () => { element.open = open; element.dispatchEvent(new window.Event("toggle")); await tick(5); }); return element; };
 const values = scope => [...scope.querySelectorAll("input, select")].map(element => element.value);
@@ -382,6 +400,14 @@ try {
     assert.equal(window.location.href, rootUrl);
     assert.equal(window.document, initialDocument);
     assert.equal(document.querySelector(".bottom-nav .active").textContent.trim(), "관리");
+    await click([...document.querySelectorAll(".management-menu button")][index]);
+    const nativeHistoryLength = window.history.length;
+    assert.equal(await nativeBackRequest(), true, "native Back handshake must consume an active management subview");
+    assert.ok(document.querySelector(".management-menu"));
+    assert.equal(window.location.href, rootUrl);
+    assert.equal(window.history.length, nativeHistoryLength, "native Back must not grow or traverse history");
+    assert.equal(window.document, initialDocument, "native Back must stay on the existing document");
+    assert.equal(await nativeBackRequest(), false, "management-root Back belongs to the original native policy");
   }
   assert.equal(routerTraversals, 0);
   await click([...document.querySelectorAll(".management-menu button")][0]);
@@ -390,11 +416,12 @@ try {
   assert.deepEqual(values(special), v2Values);
   for (const label of ["수업구성", "수업일지", "본부 카타", "삼성당 심사표", "초심자용 교본"]) {
     await nav(label); assert.equal(document.querySelector(".bottom-nav .active").textContent.trim(), label);
+    assert.equal(await nativeBackRequest(), false, `native Back from ${label} must use the existing policy`);
     assertResponsiveControls();
     await nav("관리"); await disclose("신규 회원 발급"); assert.ok(newMember.querySelector("img"));
     assert.deepEqual(values(onboarding), verifiedValues); assert.deepEqual(values(special), v2Values);
   }
-  passed.push("D1-01 all three returns in all subviews; repeated UI returns do not traverse/grow history; five other tabs and credential state retained");
+  passed.push("D3-WU-A all three UI/browser/native Back paths in three subviews; root and five other tabs delegate native Back; no history growth or credential loss");
   passed.push("D1 narrow layout media-query cascade at 320/360/390/480/768 across three management subviews and five other tabs; names and minimum touch CSS retained (not rendered geometry)");
 
   // A management-owned entry can be traversed while another top-level tab is active.
@@ -499,10 +526,17 @@ try {
   assert.equal(window.location.pathname, "/credential-issuer");
   await click([...document.querySelectorAll(".management-menu button")][0]);
   assert.equal(document.querySelector(".credential-form input"), directInput);
+  assert.equal(await nativeBackRequest(), true, "direct route native Back handshake must return to management root");
+  assert.ok(document.querySelector(".management-menu"));
+  assert.equal(window.location.pathname, "/credential-issuer");
+  assert.equal(await nativeBackRequest(), false, "direct route management root must delegate native Back");
+  await click([...document.querySelectorAll(".management-menu button")][0]);
+  assert.equal(document.querySelector(".credential-form input"), directInput);
   // A real path change belongs to the router even while a management slot is owned.
   window.history.pushState({}, "", "/other-route");
   window.dispatchEvent(new window.PopStateEvent("popstate", { state: window.history.state }));
   assert.equal(routerTraversals, directRouterBefore + 1);
+  assert.equal(await nativeBackRequest(), false, "a changed path must keep the router/native Back policy");
   await act(async () => directRoot.unmount());
   passed.push("D1-01 direct /credential-issuer keeps input through all returns and does not swallow another route");
   console.log(JSON.stringify({ status: "PASS", count: passed.length, passed, openCalls, signCalls, scope: "Happy DOM + ephemeral mock native signer; not Android/Fold8" }, null, 2));

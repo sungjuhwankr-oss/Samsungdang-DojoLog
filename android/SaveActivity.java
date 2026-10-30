@@ -10,6 +10,7 @@ import android.os.Bundle;
 import android.provider.OpenableColumns;
 import android.util.Base64;
 import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
 import android.webkit.WebView;
 
 import org.json.JSONObject;
@@ -29,7 +30,10 @@ public final class SaveActivity extends MainActivity {
     private static final int CREATE_PNG = 9903;
     private static final int MAX_BACKUP_BYTES = 10 * 1024 * 1024;
     private static final int MAX_SHARE_IMAGE_BYTES = 4 * 1024 * 1024;
+    private static final long ANDROID_BACK_TIMEOUT_MS = 1500L;
     private WebView appWebView;
+    private boolean androidBackPending;
+    private long androidBackGeneration;
     private String pendingFilename;
     private String pendingContent;
     private byte[] pendingPng;
@@ -49,6 +53,52 @@ public final class SaveActivity extends MainActivity {
             appWebView.reload();
         } catch (Exception error) {
             throw new IllegalStateException("Unable to attach backup bridge", error);
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (isFinishing() || isDestroyed()) return;
+        final WebView target = appWebView;
+        if (target == null || !isTrustedAppPage()) {
+            super.onBackPressed();
+            return;
+        }
+        // One native Back press must not race a second WebView history traversal.
+        if (androidBackPending) return;
+        androidBackPending = true;
+        final long requestGeneration = ++androidBackGeneration;
+        // A missing WebView callback must not permanently disable future Back presses.
+        // Never navigate on timeout: a late JavaScript handler may already have returned to management.
+        if (!target.postDelayed(new Runnable() {
+            @Override public void run() {
+                if (androidBackPending && androidBackGeneration == requestGeneration) {
+                    androidBackPending = false;
+                }
+            }
+        }, ANDROID_BACK_TIMEOUT_MS)) {
+            androidBackPending = false;
+            super.onBackPressed();
+            return;
+        }
+        try {
+            target.evaluateJavascript(
+                    "(function(){try{var request={handled:false};"
+                            + "window.dispatchEvent(new CustomEvent('samsungdang-android-back',{detail:request}));"
+                            + "return request.handled===true;}catch(error){return false;}})()",
+                    new ValueCallback<String>() {
+                        @Override public void onReceiveValue(String handled) {
+                            if (!androidBackPending || androidBackGeneration != requestGeneration) return;
+                            androidBackPending = false;
+                            if (appWebView != target || isFinishing() || isDestroyed()) return;
+                            // No management subview claimed this press: preserve Nitron's Back policy.
+                            if (!"true".equals(handled)) SaveActivity.super.onBackPressed();
+                        }
+                    });
+        } catch (RuntimeException error) {
+            if (!androidBackPending || androidBackGeneration != requestGeneration) return;
+            androidBackPending = false;
+            if (!isFinishing() && !isDestroyed()) super.onBackPressed();
         }
     }
 

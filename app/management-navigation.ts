@@ -1,4 +1,5 @@
 export const MANAGEMENT_RETURN_EVENT = "samsungdang-management-return";
+export const MANAGEMENT_ANDROID_BACK_EVENT = "samsungdang-android-back";
 const HISTORY_MARKER = "samsungdangManagementSubview";
 const RETURN_URL = "samsungdangManagementReturnUrl";
 
